@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+output/
+.playwright-cli/
+.DS_Store
+
+# Xcode user-specific and generated state
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+
+# TypeScript/Vite generated files
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
