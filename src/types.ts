@@ -13,10 +13,10 @@ export type ExerciseFamily =
   | 'constraints'
   | 'data-sprint'
   | 'debug-scan'
-  | 'memory-grid'
   | 'pattern-recall'
   | 'tile-sequence'
   | 'arrow-shift'
+  | 'reaction-match'
   | 'spatial'
   | 'route-planner'
 
@@ -39,21 +39,39 @@ export type ArrowGridItem = {
   cue: SequenceCue
 }
 
+export type ReactionShape = 'cog' | 'burst' | 'orb'
+
+export type CubeNetCell = {
+  x: number
+  y: number
+  label?: string
+}
+
+export type SpatialOptionVisual = {
+  kind: 'cube-net'
+  cells: CubeNetCell[]
+}
+
 export type VisualSpec =
   | { kind: 'matrix'; columns: number; cells: Array<VisualToken | null> }
-  | { kind: 'tiles'; columns: number; cells: VisualToken[] }
+  | { kind: 'tiles'; columns: number; cells: VisualToken[]; positionGuide?: boolean }
   | { kind: 'bars'; labels: string[]; values: number[]; suffix?: string }
   | { kind: 'table'; title?: string; columns: string[]; rows: Array<{ label: string; values: Array<string | number> }>; note?: string }
   | { kind: 'reference'; caption: string; lines: string[]; revealMs: number }
   | { kind: 'memory'; cells: number[]; size: number; revealMs: number }
   | { kind: 'sequence'; size: number; path: number[]; cues: SequenceCue[]; targetCue: SequenceCue; flashMs: number; gapMs: number }
   | { kind: 'arrow-shift'; size: 5; before: ArrowGridItem[]; after: ArrowGridItem[]; targetCue: SequenceCue; changedCells: number[]; targetCell: number; firstRevealMs: number; gapMs: number; secondRevealMs: number }
+  | { kind: 'reaction-match'; leftColor: string; rightColor: string; targetSide: 'left' | 'right'; shape: ReactionShape; previewMs: number; responseWindowMs: number }
+  | { kind: 'spatial-angle'; startAngle: number; endAngle?: number; clockwise: boolean; label?: string }
+  | { kind: 'cube-net'; cells: CubeNetCell[] }
+  | { kind: 'spatial-solid'; solid: 'cube' }
   | { kind: 'route'; size: number; blocked: number[]; start: number; end: number; checkpoints?: Array<{ cell: number; label: string }>; costs?: Array<{ cell: number; cost: number }> }
 
 export type ExerciseOption = {
   id: string
   label: string
   visual?: VisualToken
+  spatialVisual?: SpatialOptionVisual
 }
 
 export type AnswerSpec =
@@ -86,6 +104,8 @@ export type Attempt = {
   correct: boolean
   skipped: boolean
   responseMs: number
+  /** Speed-weighted points awarded by reaction exercises. */
+  points?: number
 }
 
 export type SkillBreakdown = {
@@ -114,6 +134,8 @@ export type SessionResult = {
   averageMs: number
   medianMs: number
   score: number
+  /** Total speed points from reaction exercises in this session. */
+  points?: number
   breakdown: Partial<Record<ExerciseFamily, SkillBreakdown>>
 }
 
@@ -124,6 +146,7 @@ export type SessionConfig = {
   difficulty: Difficulty
   duration: number
   simulation?: boolean
+  controls?: { leftKey: string; rightKey: string }
 }
 
 export const FAMILY_LABELS: Record<ExerciseFamily, string> = {
@@ -141,10 +164,10 @@ export const FAMILY_LABELS: Record<ExerciseFamily, string> = {
   constraints: 'Constraint Logic',
   'data-sprint': 'Data Sprint',
   'debug-scan': 'Debug Scan',
-  'memory-grid': 'Memory Grid',
   'pattern-recall': 'Pattern Recall',
   'tile-sequence': 'Sequence Flash',
   'arrow-shift': 'Arrow Shift',
+  'reaction-match': 'Reflex Match',
   spatial: 'Spatial Lab',
   'route-planner': 'Route Planner',
 }
@@ -158,5 +181,9 @@ export const LOGIC_FAMILIES: ExerciseFamily[] = [
 ]
 
 export const COGNITIVE_FAMILIES: ExerciseFamily[] = [
-  'data-sprint', 'debug-scan', 'memory-grid', 'pattern-recall', 'tile-sequence', 'arrow-shift', 'spatial', 'route-planner',
+  'data-sprint', 'debug-scan', 'pattern-recall', 'tile-sequence', 'arrow-shift', 'reaction-match', 'spatial', 'route-planner',
 ]
+
+export function isExerciseFamily(value: string): value is ExerciseFamily {
+  return value in FAMILY_LABELS
+}

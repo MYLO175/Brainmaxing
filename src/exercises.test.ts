@@ -22,8 +22,14 @@ describe('exercise generators', () => {
           const ids = exercise.options?.map((option) => option.id) || []
           expect(ids).toContain(exercise.answer.value)
           expect(new Set(ids).size).toBe(ids.length)
-          const presentations = exercise.options?.map((option) => JSON.stringify([option.label, option.visual])) || []
+          const presentations = exercise.options?.map((option) => JSON.stringify([option.label, option.visual, option.spatialVisual])) || []
           expect(new Set(presentations).size).toBe(presentations.length)
+          expect(isCorrect(exercise, exercise.answer.value)).toBe(true)
+        } else if (exercise.answer.kind === 'cell') {
+          expect(exercise.visual?.kind).toBe('arrow-shift')
+          expect(Number.isInteger(exercise.answer.value)).toBe(true)
+          expect(exercise.answer.value).toBeGreaterThanOrEqual(0)
+          expect(exercise.answer.value).toBeLessThan(25)
           expect(isCorrect(exercise, exercise.answer.value)).toBe(true)
         } else if (exercise.answer.kind === 'cells') {
           expect(exercise.visual?.kind).toBe('memory')
@@ -53,7 +59,7 @@ describe('exercise generators', () => {
     powers: ['square', 'cube', 'square-root', 'cube-root', 'powers-of-ten', 'remainder', 'divisibility', 'exponent-product', 'exponent-quotient', 'scientific-multiplication', 'combined-root-power', 'last-digit-power'],
     estimation: ['product', 'sum', 'difference', 'quotient', 'order-of-magnitude', 'percentage-estimate', 'multi-step-estimate', 'budget-estimate'],
     sequences: [], matrix: [], 'rule-breaker': [], constraints: [], 'data-sprint': [],
-    'debug-scan': [], 'memory-grid': [], 'pattern-recall': [], 'tile-sequence': [], spatial: [], 'route-planner': [],
+    'debug-scan': [], 'pattern-recall': [], 'tile-sequence': [], 'arrow-shift': [], 'reaction-match': [], spatial: [], 'route-planner': [],
   }
 
   const logicVariants: Partial<Record<ExerciseFamily, string[]>> = {
@@ -137,18 +143,19 @@ describe('exercise generators', () => {
   })
 
   const cognitiveVariants: Partial<Record<ExerciseFamily, string[]>> = {
-    'data-sprint': ['bar-maximum', 'bar-difference', 'bar-total', 'bar-percentage-change', 'table-error-rate', 'table-success-volume', 'table-conditional-total', 'table-projection', 'table-weighted-cost'],
+    'data-sprint': ['bar-maximum', 'bar-difference', 'bar-total', 'bar-percentage-change', 'table-error-rate', 'table-success-volume', 'table-conditional-total', 'table-projection', 'table-budget-variance', 'table-conversion-yield', 'table-weighted-average', 'table-threshold-performance', 'table-compound-forecast', 'table-efficiency-index', 'table-weighted-cost'],
     'debug-scan': ['identifier-recall', 'field-recall', 'config-recall', 'incident-recall', 'mapping-recall', 'rule-audit'],
-    'memory-grid': ['membership', 'highlighted-cell', 'row-count', 'column-count', 'fullest-row', 'pair-recall', 'quadrant-count', 'missing-from-row'],
     'pattern-recall': ['sparse-scatter', 'short-chain', 'cluster', 'split-groups', 'edge-centre', 'broken-symmetry', 'dense-scatter', 'multi-cluster'],
     'tile-sequence': ['short-unique', 'corner-centre', 'wide-jumps', 'revisit', 'interleaved-return', 'large-grid-scan', 'target-filter', 'target-filter-return', 'target-filter-rapid'],
-    spatial: ['rotation', 'double-rotation', 'positioned-rotation', 'reflection', 'reflect-then-rotate', 'rotate-then-reflect', 'inverse-transform', 'three-step-transform'],
+    'arrow-shift': ['cardinal-shift', 'mixed-angle-shift', 'dense-shift', 'colour-filter', 'colour-filter-multiple', 'colour-filter-rapid'],
+    'reaction-match': ['cog-match', 'burst-match', 'orb-match', 'cog-rush', 'burst-rush', 'orb-rush'],
+    spatial: ['double-rotation', 'positioned-rotation', 'reflection', 'reflect-then-rotate', 'rotate-then-reflect', 'inverse-transform', 'three-step-transform', 'angle-between', 'angle-composition', 'cube-net', 'opposite-face'],
     'route-planner': ['open-grid', 'light-obstacles', 'single-wall', 'checkpoint', 'ordered-checkpoints', 'choose-order', 'double-wall', 'weighted-route'],
   }
 
   it.each(COGNITIVE_FAMILIES)('%s exposes its complete cognitive task library', (family) => {
     const found = new Set<string>()
-    for (const level of [2, 5, 7, 9]) {
+    for (const level of [2, 4, 5, 7, 8, 9, 10]) {
       for (let seed = 1; seed <= 1400; seed += 1) {
         const variant = generateExercise(family, level, seed).variant
         if (variant) found.add(variant)
@@ -161,19 +168,19 @@ describe('exercise generators', () => {
     const foundationOnly: Partial<Record<ExerciseFamily, string[]>> = {
       'data-sprint': ['bar-maximum', 'bar-difference', 'bar-total'],
       'debug-scan': ['identifier-recall', 'field-recall'],
-      'memory-grid': ['membership', 'highlighted-cell'],
       'pattern-recall': ['sparse-scatter', 'short-chain'],
       'tile-sequence': ['short-unique', 'corner-centre'],
-      spatial: ['rotation', 'double-rotation'],
+      'arrow-shift': ['cardinal-shift'],
+      spatial: ['double-rotation', 'positioned-rotation', 'reflection', 'angle-between'],
       'route-planner': ['open-grid', 'light-obstacles'],
     }
     const expertOnly: Partial<Record<ExerciseFamily, string[]>> = {
-      'data-sprint': ['table-success-volume', 'table-conditional-total', 'table-projection', 'table-weighted-cost'],
+      'data-sprint': ['table-weighted-cost', 'table-compound-forecast', 'table-efficiency-index', 'table-conversion-yield'],
       'debug-scan': ['incident-recall', 'mapping-recall', 'rule-audit'],
-      'memory-grid': ['fullest-row', 'pair-recall', 'quadrant-count', 'missing-from-row'],
       'pattern-recall': ['dense-scatter', 'multi-cluster', 'broken-symmetry'],
       'tile-sequence': ['target-filter', 'target-filter-return', 'target-filter-rapid'],
-      spatial: ['reflect-then-rotate', 'rotate-then-reflect', 'inverse-transform', 'three-step-transform'],
+      'arrow-shift': ['colour-filter-multiple', 'colour-filter-rapid'],
+      spatial: ['reflect-then-rotate', 'rotate-then-reflect', 'inverse-transform', 'three-step-transform', 'angle-composition', 'cube-net', 'opposite-face'],
       'route-planner': ['double-wall', 'ordered-checkpoints', 'choose-order', 'weighted-route'],
     }
     const foundation = new Set(Array.from({ length: 1200 }, (_, seed) => generateExercise(family, 2, seed + 1).variant))
@@ -187,7 +194,72 @@ describe('exercise generators', () => {
 
   it.each(COGNITIVE_FAMILIES)('%s gives expert tasks more calibrated working time', (family) => {
     const averageTarget = (level: number) => Array.from({ length: 700 }, (_, seed) => generateExercise(family, level, seed + 1).responseTargetMs).reduce((sum, value) => sum + value, 0) / 700
-    expect(averageTarget(9)).toBeGreaterThan(averageTarget(2))
+    if (family === 'reaction-match') expect(averageTarget(9)).toBeLessThan(averageTarget(2))
+    else expect(averageTarget(9)).toBeGreaterThan(averageTarget(2))
+  })
+
+  it('tightens the Reflex Match reveal and response windows as difficulty rises', () => {
+    const foundation = generateExercise('reaction-match', 2, 41)
+    const expert = generateExercise('reaction-match', 9, 41)
+    expect(foundation.visual?.kind).toBe('reaction-match')
+    expect(expert.visual?.kind).toBe('reaction-match')
+    if (foundation.visual?.kind !== 'reaction-match' || expert.visual?.kind !== 'reaction-match') return
+    expect(expert.visual.previewMs).toBeLessThan(foundation.visual.previewMs)
+    expect(expert.visual.responseWindowMs).toBeLessThan(foundation.visual.responseWindowMs)
+    expect(foundation.visual.leftColor).not.toBe(foundation.visual.rightColor)
+    expect(['left', 'right']).toContain(expert.visual.targetSide)
+  })
+
+  it('uses only the fixed pink and blue Reflex Match colours while swapping their sides', () => {
+    const rounds = Array.from({ length: 80 }, (_, seed) => generateExercise('reaction-match', 5, seed + 1))
+    const allowed = new Set(['#ff2664', '#31b8e8'])
+    const sidePairs = new Set<string>()
+    for (const round of rounds) {
+      expect(round.visual?.kind).toBe('reaction-match')
+      if (round.visual?.kind !== 'reaction-match') continue
+      expect(allowed.has(round.visual.leftColor)).toBe(true)
+      expect(allowed.has(round.visual.rightColor)).toBe(true)
+      expect(round.visual.leftColor).not.toBe(round.visual.rightColor)
+      sidePairs.add(`${round.visual.leftColor}/${round.visual.rightColor}`)
+    }
+    expect(sidePairs.size).toBe(2)
+  })
+
+  it('starts Spatial Lab with directed angles or off-centre transforms instead of single centred turns', () => {
+    const foundation = Array.from({ length: 800 }, (_, seed) => generateExercise('spatial', 1, seed + 1))
+    expect(new Set(foundation.map((exercise) => exercise.variant))).toEqual(new Set(['positioned-rotation', 'angle-between']))
+    const transformQuestions = foundation.filter((exercise) => exercise.visual?.kind === 'tiles')
+    expect(transformQuestions.length).toBeGreaterThan(200)
+    expect(new Set(transformQuestions.flatMap((exercise) => exercise.visual?.kind === 'tiles' ? exercise.visual.cells.map((cell) => cell.shape) : []))).toEqual(new Set(['arrow', 'triangle']))
+    expect(transformQuestions.every((exercise) => exercise.visual?.kind === 'tiles' && exercise.visual.cells.every((cell) => cell.position !== 'center'))).toBe(true)
+    const angleQuestions = foundation.filter((exercise) => exercise.variant === 'angle-between')
+    expect(angleQuestions.every((exercise) => exercise.visual?.kind === 'spatial-angle' && [135, 180, 225, 270].includes(Number(`${exercise.answer.value}`.replace('°', ''))))).toBe(true)
+  })
+
+  it('uses real net and face-folding question structures at upper Spatial Lab levels', () => {
+    const expert = Array.from({ length: 1600 }, (_, seed) => generateExercise('spatial', 9, seed + 1))
+    const variants = new Set(expert.map((exercise) => exercise.variant))
+    expect(variants).toContain('cube-net')
+    expect(variants).toContain('opposite-face')
+    expect(variants).toContain('angle-composition')
+
+    for (const exercise of expert.filter((item) => item.variant === 'cube-net')) {
+      expect(exercise.visual?.kind).toBe('spatial-solid')
+      expect(exercise.options).toHaveLength(4)
+      expect(exercise.options?.every((option) => option.spatialVisual?.kind === 'cube-net' && option.spatialVisual.cells.length === 6)).toBe(true)
+      for (const option of exercise.options || []) {
+        const cells = option.spatialVisual?.cells || []
+        expect(new Set(cells.map((cell) => `${cell.x},${cell.y}`)).size).toBe(6)
+      }
+    }
+
+    for (const exercise of expert.filter((item) => item.variant === 'opposite-face')) {
+      expect(exercise.visual?.kind).toBe('cube-net')
+      if (exercise.visual?.kind !== 'cube-net') continue
+      const labels = exercise.visual.cells.map((cell) => cell.label)
+      expect(new Set(labels).size).toBe(6)
+      expect(labels).toContain(exercise.answer.value)
+    }
   })
 
   it.each(COGNITIVE_FAMILIES)('%s avoids either of the two most recent expert mechanics', (family) => {
@@ -214,21 +286,22 @@ describe('exercise generators', () => {
     }
   })
 
+  it('gives Data Sprint materially distinct one-step, intermediate and multi-step level pools', () => {
+    const variantsAt = (level: number) => new Set(Array.from({ length: 1000 }, (_, seed) => generateExercise('data-sprint', level, seed + 1).variant))
+    expect(variantsAt(2)).toEqual(new Set(['bar-maximum', 'bar-difference', 'bar-total']))
+    expect(variantsAt(5)).toEqual(new Set(['table-success-volume', 'table-conditional-total', 'table-projection']))
+    expect(variantsAt(8)).toEqual(new Set(['table-threshold-performance', 'table-compound-forecast', 'table-efficiency-index']))
+    const expert = variantsAt(10)
+    expect([...expert].every((variant) => variant?.startsWith('table-'))).toBe(true)
+    expect([...expert].some((variant) => variant === 'table-weighted-average')).toBe(true)
+    expect([...expert].some((variant) => variant === 'table-threshold-performance')).toBe(true)
+  })
+
   it('uses delayed recall or rule application for expert Debug Scan', () => {
     const exercises = Array.from({ length: 800 }, (_, seed) => generateExercise('debug-scan', 9, seed + 1))
     expect(exercises.every((exercise) => exercise.visual?.kind === 'reference' || exercise.visual?.kind === 'table')).toBe(true)
     expect(exercises.some((exercise) => exercise.visual?.kind === 'reference' && exercise.visual.lines.length === 4)).toBe(true)
     expect(exercises.some((exercise) => exercise.variant === 'rule-audit')).toBe(true)
-  })
-
-  it('scales Memory Grid capacity and reveal time materially', () => {
-    const foundation = generateExercise('memory-grid', 2, 41)
-    const expert = generateExercise('memory-grid', 9, 41)
-    expect(foundation.visual?.kind).toBe('memory')
-    expect(expert.visual?.kind).toBe('memory')
-    if (foundation.visual?.kind !== 'memory' || expert.visual?.kind !== 'memory') return
-    expect(expert.visual.size).toBeGreaterThan(foundation.visual.size)
-    expect(expert.visual.revealMs).toBeLessThan(foundation.visual.revealMs)
   })
 
   it('scales Pattern Recall from 4×4 to 5×5 with shorter flashes and denser targets', () => {
@@ -317,6 +390,49 @@ describe('exercise generators', () => {
     expect(isCorrect(exercise, exercise.answer.value)).toBe(true)
     expect(isCorrect(exercise, changed)).toBe(false)
     expect(isCorrect(exercise, exercise.answer.value.slice(0, -1))).toBe(false)
+  })
+
+  it('scales Arrow Shift density and exposure while keeping one valid target change', () => {
+    const foundation = generateExercise('arrow-shift', 2, 41)
+    const expert = generateExercise('arrow-shift', 9, 41)
+    expect(foundation.visual?.kind).toBe('arrow-shift')
+    expect(expert.visual?.kind).toBe('arrow-shift')
+    expect(foundation.answer.kind).toBe('cell')
+    expect(expert.answer.kind).toBe('cell')
+    if (foundation.visual?.kind !== 'arrow-shift' || expert.visual?.kind !== 'arrow-shift' || foundation.answer.kind !== 'cell' || expert.answer.kind !== 'cell') return
+    expect(foundation.visual.size).toBe(5)
+    expect(expert.visual.size).toBe(5)
+    expect(foundation.visual.before).toHaveLength(3)
+    expect(foundation.visual.firstRevealMs).toBeGreaterThanOrEqual(1900)
+    expect(foundation.visual.before.every((item) => [0, 90, 180, 270].includes(item.direction))).toBe(true)
+    expect(expert.visual.before.length).toBeGreaterThan(foundation.visual.before.length + 8)
+    expect(expert.visual.firstRevealMs).toBeLessThan(foundation.visual.firstRevealMs)
+    expect(expert.visual.secondRevealMs).toBeLessThan(foundation.visual.secondRevealMs)
+    expect(new Set(foundation.visual.before.map((item) => item.cue))).toEqual(new Set(['lime-circle']))
+    expect(new Set(expert.visual.before.map((item) => item.cue))).toEqual(new Set(['lime-circle', 'violet-diamond']))
+  })
+
+  it('changes exactly one target-colour Arrow Shift arrow while expert distractors may also rotate', () => {
+    for (let seed = 1; seed <= 500; seed += 1) {
+      const exercise = generateExercise('arrow-shift', 9, seed)
+      expect(exercise.visual?.kind).toBe('arrow-shift')
+      expect(exercise.answer.kind).toBe('cell')
+      if (exercise.visual?.kind !== 'arrow-shift' || exercise.answer.kind !== 'cell') continue
+      const visual = exercise.visual
+      const beforeByCell = new Map(visual.before.map((item) => [item.cell, item]))
+      const afterByCell = new Map(visual.after.map((item) => [item.cell, item]))
+      expect(new Set(beforeByCell.keys())).toEqual(new Set(afterByCell.keys()))
+      expect(visual.before.every((item) => afterByCell.get(item.cell)?.cue === item.cue)).toBe(true)
+      const actualChanges = visual.before.filter((item) => afterByCell.get(item.cell)?.direction !== item.direction).map((item) => item.cell)
+      expect(new Set(actualChanges)).toEqual(new Set(visual.changedCells))
+      const targetChanges = actualChanges.filter((cell) => beforeByCell.get(cell)?.cue === visual.targetCue)
+      const distractorChanges = actualChanges.filter((cell) => beforeByCell.get(cell)?.cue !== visual.targetCue)
+      expect(targetChanges).toEqual([visual.targetCell])
+      expect(distractorChanges).toHaveLength(2)
+      expect(exercise.answer.value).toBe(visual.targetCell)
+      expect(isCorrect(exercise, visual.targetCell)).toBe(true)
+      expect(isCorrect(exercise, distractorChanges[0])).toBe(false)
+    }
   })
 
   it('produces varied route answers and genuinely constrained expert routes', () => {

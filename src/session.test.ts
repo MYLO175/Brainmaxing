@@ -46,6 +46,13 @@ describe('session data', () => {
     expect(result.duration).toBe(125)
   })
 
+  it('totals speed-weighted reaction points in session results', () => {
+    const reactionConfig: SessionConfig = { track: 'cognitive', label: 'Reflex Match', families: ['reaction-match'], difficulty: 'Hard', duration: 30 }
+    const exercise = generateExercise('reaction-match', 9, 101)
+    const attempt: Attempt = { exercise, given: exercise.answer.kind === 'choice' ? exercise.answer.value : null, correct: true, skipped: false, responseMs: 240, points: 784 }
+    expect(buildSessionResult(reactionConfig, [attempt], 30).points).toBe(784)
+  })
+
   it('keeps correct-answer records separate by drill, difficulty and timer', () => {
     const base = buildSessionResult(config, [], 60)
     const sessions = [

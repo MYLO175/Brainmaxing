@@ -1,4 +1,4 @@
-import type { AnswerValue, Exercise, ExerciseFamily, ExerciseOption, VisualToken } from './types'
+import type { AnswerValue, CubeNetCell, Exercise, ExerciseFamily, ExerciseOption, VisualToken } from './types'
 
 export type RandomSource = {
   next: () => number
@@ -1075,14 +1075,20 @@ function constraints(level: number, seed: number, rng: RandomSource): Exercise {
 
 function dataSprint(level: number, seed: number, rng: RandomSource): Exercise {
   const band = levelBand(level)
-  const available = band === 0
-    ? ['bar-maximum', 'bar-difference', 'bar-total']
-    : band === 1
-      ? ['bar-difference', 'bar-total', 'bar-percentage-change', 'table-error-rate']
-      : band === 2
-        ? ['bar-percentage-change', 'table-error-rate', 'table-success-volume', 'table-conditional-total', 'table-projection']
-        : ['table-success-volume', 'table-conditional-total', 'table-projection', 'table-weighted-cost']
-  const variant = rng.pick(available)
+  const availableByLevel: string[][] = [
+    [],
+    ['bar-maximum', 'bar-difference'],
+    ['bar-maximum', 'bar-difference', 'bar-total'],
+    ['bar-total', 'bar-percentage-change', 'table-error-rate'],
+    ['bar-percentage-change', 'table-error-rate', 'table-success-volume'],
+    ['table-success-volume', 'table-conditional-total', 'table-projection'],
+    ['table-conditional-total', 'table-projection', 'table-budget-variance'],
+    ['table-budget-variance', 'table-conversion-yield', 'table-weighted-average'],
+    ['table-threshold-performance', 'table-compound-forecast', 'table-efficiency-index'],
+    ['table-weighted-cost', 'table-compound-forecast', 'table-efficiency-index', 'table-conversion-yield'],
+    ['table-weighted-cost', 'table-compound-forecast', 'table-efficiency-index', 'table-threshold-performance', 'table-weighted-average'],
+  ]
+  const variant = rng.pick(availableByLevel[level])
   const dayLabels = rng.pick([
     ['Mon', 'Tue', 'Wed', 'Thu'],
     ['Q1', 'Q2', 'Q3', 'Q4'],
@@ -1118,12 +1124,17 @@ function dataSprint(level: number, seed: number, rng: RandomSource): Exercise {
     return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `What was the percentage ${increase ? 'increase' : 'decrease'} from Baseline to Current?`, instruction: 'Calculate the change relative to the baseline.', difficulty: level, responseTargetMs: band >= 2 ? 11500 : 10000, answer: { kind: 'choice', value: `${percent}` }, options: uniqueNumberOptions(rng, percent, 5, (value) => `${value}%`), visual: { kind: 'bars', labels: ['Baseline', 'Current'], values: [before, after] }, explanation: `The change is ${Math.abs(after - before)}; ${Math.abs(after - before)} ÷ ${before} × 100 = ${percent}%.` }
   }
 
-  const services = rng.shuffle(['API', 'Search', 'Worker', 'Billing'])
+  const entityContext = rng.pick([
+    { singular: 'service', plural: 'services', labels: ['API', 'Search', 'Worker', 'Billing'] },
+    { singular: 'region', plural: 'regions', labels: ['North', 'South', 'East', 'West'] },
+    { singular: 'product', plural: 'products', labels: ['Atlas', 'Nova', 'Ember', 'Orbit'] },
+  ])
+  const services = rng.shuffle(entityContext.labels)
   if (variant === 'table-error-rate') {
     const rates = rng.shuffle([2, 3, 5, 8])
     const rows = services.map((label, index) => { const requests = rng.int(8, 24) * 100; return { label, values: [requests, requests * rates[index] / 100] } })
     const maxRate = Math.max(...rates); const correct = services[rates.indexOf(maxRate)]
-    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: 'Which service has the highest error rate?', instruction: 'Compare errors as a proportion of requests—not the error count alone.', difficulty: level, responseTargetMs: band >= 2 ? 12500 : 11000, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Last hour', columns: ['Requests', 'Errors'], rows }, explanation: `${correct} has the highest rate: ${maxRate}%.` }
+    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `Which ${entityContext.singular} has the highest error rate?`, instruction: 'Compare errors as a proportion of requests—not the error count alone.', difficulty: level, responseTargetMs: level >= 4 ? 12500 : 11000, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Last hour', columns: ['Requests', 'Errors'], rows }, explanation: `${correct} has the highest rate: ${maxRate}%.` }
   }
 
   if (variant === 'table-success-volume') {
@@ -1132,7 +1143,7 @@ function dataSprint(level: number, seed: number, rng: RandomSource): Exercise {
     const successful = requests.map((value, index) => value * (100 - failureRates[index]) / 100)
     const best = Math.max(...successful); const correct = services[successful.indexOf(best)]
     const rows = services.map((label, index) => ({ label, values: [requests[index], `${failureRates[index]}%`] }))
-    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: 'Which service completed the most successful requests?', instruction: 'Convert each failure rate into a successful-request total.', difficulty: level, responseTargetMs: band === 3 ? 15500 : 14000, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Request summary', columns: ['Requests', 'Failed'], rows }, explanation: `${correct} completed ${best} successful requests, the largest derived total.` }
+    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `Which ${entityContext.singular} completed the most successful requests?`, instruction: 'Convert each failure rate into a successful-request total.', difficulty: level, responseTargetMs: 14000, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Request summary', columns: ['Requests', 'Failed'], rows }, explanation: `${correct} completed ${best} successful requests, the largest derived total.` }
   }
 
   if (variant === 'table-conditional-total') {
@@ -1142,7 +1153,7 @@ function dataSprint(level: number, seed: number, rng: RandomSource): Exercise {
     const answer = volumes.reduce((sum, value, index) => sum + (uptime[index] >= threshold ? value : 0), 0)
     const included = services.filter((_, index) => uptime[index] >= threshold)
     const rows = services.map((label, index) => ({ label, values: [volumes[index], `${uptime[index]}%`] }))
-    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `How many requests came from services with uptime of at least ${threshold}%?`, instruction: 'Filter the rows first, then total their request volumes.', difficulty: level, responseTargetMs: band === 3 ? 17000 : 15000, answer: { kind: 'choice', value: `${answer}` }, options: uniqueNumberOptions(rng, answer, 100), visual: { kind: 'table', title: 'Service reliability', columns: ['Requests', 'Uptime'], rows }, explanation: `${included.join(' and ')} meet the threshold; their volumes total ${answer}.` }
+    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `How many requests came from ${entityContext.plural} with uptime of at least ${threshold}%?`, instruction: 'Filter the rows first, then total their request volumes.', difficulty: level, responseTargetMs: 15000, answer: { kind: 'choice', value: `${answer}` }, options: uniqueNumberOptions(rng, answer, 100), visual: { kind: 'table', title: 'Reliability summary', columns: ['Requests', 'Uptime'], rows }, explanation: `${included.join(' and ')} meet the threshold; their volumes total ${answer}.` }
   }
 
   if (variant === 'table-projection') {
@@ -1151,22 +1162,99 @@ function dataSprint(level: number, seed: number, rng: RandomSource): Exercise {
     const projected = current.map((value, index) => value * (100 + growth[index]) / 100)
     const chosen = rng.int(0, services.length - 1); const answer = projected[chosen]
     const rows = services.map((label, index) => ({ label, values: [current[index], `${growth[index]}%`] }))
-    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `What is ${services[chosen]}'s projected next-period volume?`, instruction: 'Apply the stated growth rate to the current volume.', difficulty: level, responseTargetMs: band === 3 ? 15500 : 13500, answer: { kind: 'choice', value: `${answer}` }, options: plausibleNumberOptions(rng, answer, [current[chosen], answer - current[chosen], current[chosen] * growth[chosen]]), visual: { kind: 'table', title: 'Capacity forecast', columns: ['Current', 'Growth'], rows }, explanation: `${current[chosen]} × ${100 + growth[chosen]}% = ${answer}.` }
+    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `What is ${services[chosen]}'s projected next-period volume?`, instruction: 'Apply the stated growth rate to the current volume.', difficulty: level, responseTargetMs: 14000, answer: { kind: 'choice', value: `${answer}` }, options: plausibleNumberOptions(rng, answer, [current[chosen], answer - current[chosen], current[chosen] * growth[chosen]]), visual: { kind: 'table', title: 'Capacity forecast', columns: ['Current', 'Growth'], rows }, explanation: `${current[chosen]} × ${100 + growth[chosen]}% = ${answer}.` }
+  }
+
+  if (variant === 'table-budget-variance') {
+    const profiles = rng.shuffle([
+      { planned: 120, actual: 145, unitCost: 8 },
+      { planned: 160, actual: 180, unitCost: 5 },
+      { planned: 90, actual: 130, unitCost: 11 },
+      { planned: 200, actual: 188, unitCost: 4 },
+    ])
+    const overspend = profiles.map((profile) => (profile.actual - profile.planned) * profile.unitCost)
+    const highest = Math.max(...overspend); const correct = services[overspend.indexOf(highest)]
+    const rows = services.map((label, index) => ({ label, values: [profiles[index].planned, profiles[index].actual, `£${profiles[index].unitCost}`] }))
+    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `Which ${entityContext.singular} generated the greatest overspend?`, instruction: 'For each row, calculate (actual − planned) × unit cost.', difficulty: level, responseTargetMs: level >= 8 ? 18000 : 16500, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Resource variance', columns: ['Planned', 'Actual', 'Per unit'], rows }, explanation: `${correct} has the largest overspend: (${profiles[overspend.indexOf(highest)].actual} − ${profiles[overspend.indexOf(highest)].planned}) × £${profiles[overspend.indexOf(highest)].unitCost} = £${highest}.` }
+  }
+
+  if (variant === 'table-conversion-yield') {
+    const profiles = rng.shuffle([
+      { visits: 2400, signup: 30, paid: 25 },
+      { visits: 1800, signup: 40, paid: 30 },
+      { visits: 3000, signup: 25, paid: 20 },
+      { visits: 1600, signup: 45, paid: 35 },
+    ])
+    const customers = profiles.map((profile) => profile.visits * profile.signup / 100 * profile.paid / 100)
+    const highest = Math.max(...customers); const correct = services[customers.indexOf(highest)]
+    const rows = services.map((label, index) => ({ label, values: [profiles[index].visits, `${profiles[index].signup}%`, `${profiles[index].paid}%`] }))
+    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `Which ${entityContext.singular} produces the most paying customers?`, instruction: 'Paid rate is a percentage of sign-ups, not of visits. Work through both stages.', difficulty: level, responseTargetMs: level >= 9 ? 21000 : 19000, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Conversion funnel', columns: ['Visits', 'Sign up', 'Pay after sign-up'], rows }, explanation: `${correct} produces ${highest} paying customers after both conversion stages, the highest total.` }
+  }
+
+  if (variant === 'table-weighted-average') {
+    const profileSets = [
+      [{ units: 120, cost: 8 }, { units: 80, cost: 12 }, { units: 160, cost: 5 }, { units: 40, cost: 20 }],
+      [{ units: 150, cost: 6 }, { units: 100, cost: 9 }, { units: 50, cost: 15 }, { units: 200, cost: 4 }],
+      [{ units: 80, cost: 14 }, { units: 120, cost: 7 }, { units: 200, cost: 5 }, { units: 100, cost: 11 }],
+    ]
+    const profiles = rng.shuffle(rng.pick(profileSets))
+    const totalUnits = profiles.reduce((sum, profile) => sum + profile.units, 0)
+    const totalCost = profiles.reduce((sum, profile) => sum + profile.units * profile.cost, 0)
+    const answer = rounded(totalCost / totalUnits, 2)
+    const rows = services.map((label, index) => ({ label, values: [profiles[index].units, `£${profiles[index].cost}`] }))
+    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: 'What is the weighted average cost per unit across the whole allocation?', instruction: 'Find total cost across all rows, then divide by total units. Do not average the four prices.', difficulty: level, responseTargetMs: level >= 10 ? 24000 : 21000, answer: { kind: 'choice', value: `${answer}` }, options: uniqueNumberOptions(rng, answer, .5, (value) => `£${value.toFixed(2)}`), visual: { kind: 'table', title: 'Allocation cost', columns: ['Units', 'Per unit'], rows }, explanation: `Total cost is £${totalCost} across ${totalUnits} units, so £${totalCost} ÷ ${totalUnits} = £${answer} per unit.` }
+  }
+
+  if (variant === 'table-threshold-performance') {
+    const threshold = rng.pick([200, 220])
+    const profiles = rng.shuffle([
+      { requests: 2100, success: 80, latency: 180 },
+      { requests: 1800, success: 96, latency: 210 },
+      { requests: 2300, success: 72, latency: 160 },
+      { requests: 2400, success: 94, latency: 260 },
+    ])
+    const completed = profiles.map((profile) => profile.latency <= threshold ? profile.requests * profile.success / 100 : -1)
+    const highest = Math.max(...completed); const correct = services[completed.indexOf(highest)]
+    const rows = services.map((label, index) => ({ label, values: [profiles[index].requests, `${profiles[index].success}%`, `${profiles[index].latency} ms`] }))
+    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `Among ${entityContext.plural} at or below ${threshold} ms, which completes the most requests successfully?`, instruction: 'Filter by latency first, then calculate successful volume for the remaining rows.', difficulty: level, responseTargetMs: 22000, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Performance review', columns: ['Requests', 'Success', 'Latency'], rows }, explanation: `${correct} passes the latency filter and completes ${highest} requests successfully, the highest eligible total.` }
+  }
+
+  if (variant === 'table-compound-forecast') {
+    const profiles = rng.shuffle([
+      { current: 1800, growth: 20, churn: 5 },
+      { current: 2200, growth: 10, churn: 8 },
+      { current: 1600, growth: 35, churn: 4 },
+      { current: 2500, growth: 5, churn: 12 },
+    ])
+    const retained = profiles.map((profile) => rounded(profile.current * (100 + profile.growth) / 100 * (100 - profile.churn) / 100, 1))
+    const highest = Math.max(...retained); const correct = services[retained.indexOf(highest)]
+    const rows = services.map((label, index) => ({ label, values: [profiles[index].current, `${profiles[index].growth}%`, `${profiles[index].churn}%`] }))
+    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `Which ${entityContext.singular} will retain the largest next-period volume?`, instruction: 'Apply growth first, then remove churn from the grown total.', difficulty: level, responseTargetMs: level >= 10 ? 23000 : 21500, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Compound forecast', columns: ['Current', 'Growth', 'Churn after growth'], rows }, explanation: `${correct} retains ${highest} after applying both changes, the largest projected total.` }
+  }
+
+  if (variant === 'table-efficiency-index') {
+    const profiles = rng.shuffle([
+      { output: 2400, minutes: 60, failed: 5 },
+      { output: 2700, minutes: 75, failed: 4 },
+      { output: 2100, minutes: 50, failed: 10 },
+      { output: 3200, minutes: 80, failed: 8 },
+    ])
+    const usablePerMinute = profiles.map((profile) => rounded(profile.output * (100 - profile.failed) / 100 / profile.minutes, 2))
+    const highest = Math.max(...usablePerMinute); const correct = services[usablePerMinute.indexOf(highest)]
+    const rows = services.map((label, index) => ({ label, values: [profiles[index].output, profiles[index].minutes, `${profiles[index].failed}%`] }))
+    return { id: id('data-sprint', seed), family: 'data-sprint', variant, label: 'Data Sprint', prompt: `Which ${entityContext.singular} has the highest usable output per minute?`, instruction: 'Remove failed output, then divide the usable total by runtime. The leading values are close.', difficulty: level, responseTargetMs: level >= 10 ? 24000 : 22500, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Efficiency comparison', columns: ['Output', 'Minutes', 'Failed'], rows }, explanation: `${correct} produces ${highest} usable units per minute, narrowly the highest rate.` }
   }
 
   const profiles = rng.shuffle([
-    { units: rng.int(10, 12) * 10, unitCost: 8, discount: 0 },
-    { units: rng.int(7, 9) * 10, unitCost: 6, discount: 5 },
-    { units: rng.int(5, 8) * 10, unitCost: 4, discount: 10 },
-    { units: rng.int(4, 7) * 10, unitCost: 3, discount: 20 },
+    { units: 120, unitCost: 8, discount: 10 },
+    { units: 160, unitCost: 6, discount: 5 },
+    { units: 210, unitCost: 5, discount: 15 },
+    { units: 300, unitCost: 3.5, discount: 18 },
   ])
-  const units = profiles.map((profile) => profile.units)
-  const unitCost = profiles.map((profile) => profile.unitCost)
-  const discounts = profiles.map((profile) => profile.discount)
-  const costs = units.map((value, index) => value * unitCost[index] * (100 - discounts[index]) / 100)
+  const costs = profiles.map((profile) => profile.units * profile.unitCost * (100 - profile.discount) / 100)
   const highest = Math.max(...costs); const correct = services[costs.indexOf(highest)]
-  const rows = services.map((label, index) => ({ label, values: [units[index], `£${unitCost[index]}`, `${discounts[index]}%`] }))
-  return { id: id('data-sprint', seed), family: 'data-sprint', variant: 'table-weighted-cost', label: 'Data Sprint', prompt: 'Which service has the highest net compute cost?', instruction: 'For each row: units × unit cost, then apply the discount.', difficulty: level, responseTargetMs: 19000, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Compute allocation', columns: ['Units', 'Per unit', 'Discount'], rows }, explanation: `${correct} has the largest net cost at £${highest}.` }
+  const rows = services.map((label, index) => ({ label, values: [profiles[index].units, `£${profiles[index].unitCost}`, `${profiles[index].discount}%`] }))
+  return { id: id('data-sprint', seed), family: 'data-sprint', variant: 'table-weighted-cost', label: 'Data Sprint', prompt: `Which ${entityContext.singular} has the highest net allocation cost?`, instruction: 'For each row: units × unit cost, then apply the discount. The totals are deliberately close.', difficulty: level, responseTargetMs: level >= 10 ? 24000 : 22500, answer: { kind: 'choice', value: correct }, options: rng.shuffle(services).map((label) => ({ id: label, label })), visual: { kind: 'table', title: 'Compute allocation', columns: ['Units', 'Per unit', 'Discount'], rows }, explanation: `${correct} has the largest net cost at £${highest}.` }
 }
 
 function mutateIdentifier(value: string, rng: RandomSource) {
@@ -1263,77 +1351,6 @@ function debugScan(level: number, seed: number, rng: RandomSource): Exercise {
 
 function coordinate(cell: number, size: number) {
   return `R${Math.floor(cell / size) + 1}C${cell % size + 1}`
-}
-
-function memoryGrid(level: number, seed: number, rng: RandomSource): Exercise {
-  const band = levelBand(level)
-  const size = band < 2 ? 4 : band === 2 ? 5 : 6
-  const available = band === 0
-    ? ['membership', 'highlighted-cell']
-    : band === 1
-      ? ['membership', 'highlighted-cell', 'row-count', 'column-count']
-      : band === 2
-        ? ['highlighted-cell', 'row-count', 'column-count', 'fullest-row', 'pair-recall']
-        : ['fullest-row', 'pair-recall', 'quadrant-count', 'missing-from-row']
-  const variant = rng.pick(available)
-  const revealMs = band === 0 ? 2800 : band === 1 ? 2400 : band === 2 ? 2100 : 1800
-  const all = Array.from({ length: size * size }, (_, index) => index)
-  const targetCount = band === 0 ? 4 : band === 1 ? 6 : band === 2 ? 9 : 13
-  let cells = rng.shuffle(all).slice(0, targetCount).sort((a, b) => a - b)
-  const base = { id: id('memory-grid', seed), family: 'memory-grid' as const, variant, label: 'Memory Grid', difficulty: level, visual: { kind: 'memory' as const, cells, size, revealMs } }
-
-  if (variant === 'membership') {
-    const present = rng.next() < .5; const pool = present ? cells : all.filter((cell) => !cells.includes(cell)); const asked = rng.pick(pool)
-    return { ...base, prompt: `Was ${coordinate(asked, size)} highlighted?`, instruction: 'Recall whether that exact location was lit.', responseTargetMs: band === 0 ? 7000 : 8500, answer: { kind: 'choice', value: present ? 'yes' : 'no' }, options: [{ id: 'yes', label: 'Yes' }, { id: 'no', label: 'No' }], explanation: present ? `Yes—${coordinate(asked, size)} was highlighted.` : `No—${coordinate(asked, size)} was not highlighted.` }
-  }
-
-  if (variant === 'highlighted-cell') {
-    const correctCell = rng.pick(cells); const distractors = rng.shuffle(all.filter((cell) => !cells.includes(cell))).slice(0, 3).map((cell) => coordinate(cell, size)); const correct = coordinate(correctCell, size)
-    return { ...base, prompt: 'Which location was highlighted?', instruction: 'Only one option belonged to the flashed pattern.', responseTargetMs: band === 0 ? 7500 : band === 1 ? 9000 : 10500, answer: { kind: 'choice', value: correct }, options: choiceOptions(rng, correct, distractors), explanation: `${correct} was part of the highlighted pattern.` }
-  }
-
-  if (variant === 'row-count' || variant === 'column-count') {
-    const index = rng.int(0, size - 1)
-    const answer = cells.filter((cell) => variant === 'row-count' ? Math.floor(cell / size) === index : cell % size === index).length
-    const axis = variant === 'row-count' ? 'row' : 'column'
-    return { ...base, prompt: `How many highlighted cells were in ${axis} ${index + 1}?`, instruction: 'Recall and count only the requested line.', responseTargetMs: band === 1 ? 9500 : 11000, answer: { kind: 'choice', value: `${answer}` }, options: uniqueNumberOptions(rng, answer, 1), explanation: `${axis[0].toUpperCase()}${axis.slice(1)} ${index + 1} contained ${answer} highlighted cell${answer === 1 ? '' : 's'}.` }
-  }
-
-  if (variant === 'fullest-row') {
-    const targetRow = rng.int(0, size - 1); const maxCount = band === 3 ? 5 : 4
-    const selected = new Set<number>()
-    rng.shuffle(Array.from({ length: size }, (_, column) => targetRow * size + column)).slice(0, maxCount).forEach((cell) => selected.add(cell))
-    for (let row = 0; row < size; row += 1) {
-      if (row === targetRow) continue
-      rng.shuffle(Array.from({ length: size }, (_, column) => row * size + column)).slice(0, rng.int(0, maxCount - 1)).forEach((cell) => selected.add(cell))
-    }
-    cells = [...selected].sort((a, b) => a - b); base.visual.cells = cells
-    const correct = `Row ${targetRow + 1}`
-    return { ...base, prompt: 'Which row contained the most highlighted cells?', instruction: 'Compare the remembered row totals.', responseTargetMs: band === 3 ? 13000 : 11500, answer: { kind: 'choice', value: correct }, options: choiceOptions(rng, correct, Array.from({ length: size }, (_, row) => `Row ${row + 1}`).filter((value) => value !== correct)), explanation: `${correct} contained ${maxCount}, more than every other row.` }
-  }
-
-  if (variant === 'pair-recall') {
-    const pair = rng.shuffle(cells).slice(0, 2); const correct = pair.map((cell) => coordinate(cell, size)).sort().join(' + ')
-    const distractors = new Set<string>()
-    while (distractors.size < 3) {
-      const candidate = rng.shuffle(all).slice(0, 2); if (candidate.every((cell) => cells.includes(cell))) continue
-      distractors.add(candidate.map((cell) => coordinate(cell, size)).sort().join(' + '))
-    }
-    return { ...base, prompt: 'Which pair were both highlighted?', instruction: 'Both locations in the selected option must belong to the pattern.', responseTargetMs: band === 3 ? 14000 : 12000, answer: { kind: 'choice', value: correct }, options: choiceOptions(rng, correct, [...distractors]), explanation: `${correct.replace(' + ', ' and ')} were both highlighted.` }
-  }
-
-  if (variant === 'quadrant-count') {
-    const quadrant = rng.pick(['top-left', 'top-right', 'bottom-left', 'bottom-right'])
-    const answer = cells.filter((cell) => { const row = Math.floor(cell / size); const column = cell % size; return (quadrant.includes('top') ? row < size / 2 : row >= size / 2) && (quadrant.includes('left') ? column < size / 2 : column >= size / 2) }).length
-    return { ...base, prompt: `How many highlighted cells were in the ${quadrant} quadrant?`, instruction: 'Divide the grid into four equal 3×3 regions.', responseTargetMs: 14500, answer: { kind: 'choice', value: `${answer}` }, options: uniqueNumberOptions(rng, answer, 1), explanation: `The ${quadrant} quadrant contained ${answer} highlighted cells.` }
-  }
-
-  const targetRow = rng.int(0, size - 1); const missingColumn = rng.int(0, size - 1)
-  const rowCells = Array.from({ length: size }, (_, column) => targetRow * size + column).filter((cell) => cell % size !== missingColumn)
-  const outside = rng.shuffle(all.filter((cell) => Math.floor(cell / size) !== targetRow)).slice(0, 8)
-  cells = [...rowCells, ...outside].sort((a, b) => a - b); base.visual.cells = cells
-  const correct = coordinate(targetRow * size + missingColumn, size)
-  return { ...base, prompt: `Which location in row ${targetRow + 1} was not highlighted?`, instruction: 'That row was almost complete; identify its single gap.', responseTargetMs: 14000, answer: { kind: 'choice', value: correct }, options: choiceOptions(rng, correct, Array.from({ length: size }, (_, column) => coordinate(targetRow * size + column, size)).filter((value) => value !== correct)), explanation: `${correct} was the only unlit location in row ${targetRow + 1}.` }
 }
 
 function patternRecall(level: number, seed: number, rng: RandomSource): Exercise {
@@ -1493,19 +1510,19 @@ function tileSequence(level: number, seed: number, rng: RandomSource): Exercise 
 
 function arrowShift(level: number, seed: number, rng: RandomSource): Exercise {
   const size = 5 as const
-  const variant = level <= 2
+  const variant = level <= 3
     ? 'cardinal-shift'
-    : level <= 4
+    : level === 4
       ? 'mixed-angle-shift'
       : level <= 6
         ? rng.pick(['mixed-angle-shift', 'dense-shift'])
         : level <= 8
           ? rng.pick(['colour-filter', 'colour-filter-rapid'])
           : rng.pick(['colour-filter', 'colour-filter-multiple', 'colour-filter-rapid'])
-  const arrowCounts = [0, 4, 5, 6, 7, 8, 9, 11, 13, 15, 17]
-  const firstRevealTimes = [0, 1450, 1320, 1190, 1070, 960, 860, 800, 730, 660, 590]
-  const secondRevealTimes = [0, 1320, 1200, 1080, 970, 870, 780, 720, 650, 590, 530]
-  const gapTimes = [0, 360, 340, 320, 300, 280, 260, 235, 215, 195, 175]
+  const arrowCounts = [0, 2, 3, 4, 5, 7, 9, 11, 13, 15, 17]
+  const firstRevealTimes = [0, 2300, 2000, 1650, 1400, 1100, 900, 800, 730, 660, 590]
+  const secondRevealTimes = [0, 2150, 1850, 1500, 1250, 980, 800, 720, 650, 590, 530]
+  const gapTimes = [0, 500, 430, 370, 330, 290, 260, 235, 215, 195, 175]
   const totalCount = arrowCounts[level]
   const distractorCount = level < 7 ? 0 : level === 7 ? 3 : level === 8 ? 4 : level === 9 ? 5 : 6
   const distractorChanges = level < 7 ? 0 : level <= 8 ? 1 : level === 9 ? 2 : 3
@@ -1516,7 +1533,7 @@ function arrowShift(level: number, seed: number, rng: RandomSource): Exercise {
   const distractorCells = new Set(distractorCount ? rng.shuffle(occupied).slice(0, distractorCount) : [])
   const targetCells = occupied.filter((cell) => !distractorCells.has(cell))
   const targetCell = rng.pick(targetCells)
-  const directions = level <= 2 ? [0, 90, 180, 270] : [0, 45, 90, 135, 180, 225, 270, 315]
+  const directions = level <= 3 ? [0, 90, 180, 270] : [0, 45, 90, 135, 180, 225, 270, 315]
   const before = occupied.map((cell) => ({
     cell,
     direction: rng.pick(directions),
@@ -1529,8 +1546,8 @@ function arrowShift(level: number, seed: number, rng: RandomSource): Exercise {
     const differentDirections = directions.filter((direction) => direction !== item.direction)
     return { ...item, direction: rng.pick(differentDirections) }
   })
-  const targetDescription = targetCue === 'lime-circle' ? 'lime circle' : 'violet diamond'
-  const distractorDescription = distractorCue === 'lime-circle' ? 'lime circle' : 'violet diamond'
+  const targetDescription = targetCue === 'lime-circle' ? 'green' : 'purple'
+  const distractorDescription = distractorCue === 'lime-circle' ? 'green' : 'purple'
   const firstRevealMs = firstRevealTimes[level]
   const secondRevealMs = secondRevealTimes[level]
   const gapMs = gapTimes[level]
@@ -1548,6 +1565,31 @@ function arrowShift(level: number, seed: number, rng: RandomSource): Exercise {
     explanation: distractorCount
       ? `${coordinate(targetCell, size)} was the ${targetDescription} arrow that changed. ${changedDistractors.length} ${distractorDescription} arrow${changedDistractors.length === 1 ? '' : 's'} also changed and had to be ignored.`
       : `${coordinate(targetCell, size)} was the only arrow that changed direction.`,
+  }
+}
+
+function reactionMatch(level: number, seed: number, rng: RandomSource): Exercise {
+  const shapes = ['cog', 'burst', 'orb'] as const
+  const shape = rng.pick([...shapes])
+  const variant = `${shape}-${level <= 5 ? 'match' : 'rush'}`
+  const palette = rng.shuffle(['#ff2664', '#31b8e8'])
+  const [leftColor, rightColor] = palette
+  const targetSide = rng.pick(['left', 'right'] as const)
+  const previewTimes = [0, 260, 235, 210, 185, 160, 140, 120, 105, 90, 75]
+  const responseWindows = [0, 1300, 1180, 1050, 930, 820, 720, 640, 570, 500, 430]
+  const responseTargets = [0, 520, 485, 450, 415, 380, 345, 315, 285, 255, 225]
+  const previewMs = previewTimes[level]
+  const responseWindowMs = responseWindows[level]
+  const responseTargetMs = responseTargets[level]
+  return {
+    id: id('reaction-match', seed), family: 'reaction-match', variant, label: 'Reflex Match',
+    prompt: 'Which side matches the centre?',
+    instruction: 'Wait for the centre object, then react left or right.',
+    difficulty: level, responseTargetMs,
+    answer: { kind: 'choice', value: targetSide },
+    options: [{ id: 'left', label: 'Left' }, { id: 'right', label: 'Right' }],
+    visual: { kind: 'reaction-match', leftColor, rightColor, targetSide, shape, previewMs, responseWindowMs },
+    explanation: `The centre matched the ${targetSide} object. Faster correct reactions earn more points.`,
   }
 }
 
@@ -1585,17 +1627,166 @@ function spatialOptions(rng: RandomSource, answer: VisualToken) {
   return { options, correct }
 }
 
+type Vector3 = [number, number, number]
+type CubeOrientation = { normal: Vector3; up: Vector3; right: Vector3 }
+
+const VALID_CUBE_NETS: CubeNetCell[][] = [
+  [[0, 0], [0, -1], [-1, -1], [-1, -2], [-2, -2], [-2, -3]],
+  [[0, 0], [0, -1], [0, -2], [-1, -1], [1, -2], [1, -3]],
+  [[0, 0], [0, -1], [0, -2], [-1, -2], [1, 0], [1, 1]],
+  [[0, 0], [0, -1], [0, -2], [-1, -1], [-2, -1], [1, -2]],
+  [[0, 0], [0, -1], [0, -2], [-1, -2], [-1, -3], [-1, -4]],
+  [[0, 0], [0, -1], [0, -2], [0, -3], [-1, -2], [1, -3]],
+  [[0, 0], [0, -1], [0, -2], [0, -3], [-1, -2], [1, -1]],
+  [[0, 0], [0, -1], [0, -2], [0, -3], [-1, -2], [1, 0]],
+  [[0, 0], [0, -1], [0, -2], [0, -3], [-1, -3], [1, 0]],
+  [[0, 0], [0, -1], [0, -2], [-1, -1], [-2, -1], [-3, -1]],
+  [[0, 0], [0, -1], [0, -2], [-1, -1], [1, -1], [2, -1]],
+].map((cells) => cells.map(([x, y]) => ({ x, y })))
+
+const INVALID_CUBE_NETS: CubeNetCell[][] = [
+  [[0, 0], [0, -1], [0, -2], [-1, -2], [1, 0], [1, -1]],
+  [[0, 0], [0, -1], [0, -2], [-1, -2], [-1, -3], [-2, -3]],
+  [[0, 0], [0, -1], [0, -2], [-1, -2], [-2, -2], [-1, -1]],
+  [[0, 0], [0, -1], [0, -2], [-1, -2], [-1, 0], [-1, -1]],
+  [[0, 0], [0, -1], [0, -2], [0, -3], [-1, -2], [-1, -3]],
+  [[0, 0], [0, -1], [0, -2], [-1, -1], [1, -1], [1, -2]],
+  [[0, 0], [0, -1], [0, -2], [-1, -1], [-2, -1], [-1, -2]],
+  [[0, 0], [0, -1], [0, -2], [0, -3], [-1, -2], [-1, -1]],
+].map((cells) => cells.map(([x, y]) => ({ x, y })))
+
+function vectorKey(vector: Vector3) {
+  return vector.join(',')
+}
+
+function negateVector(vector: Vector3): Vector3 {
+  return vector.map((value) => -value) as Vector3
+}
+
+function sameVector(left: Vector3, right: Vector3) {
+  return left.every((value, index) => value === right[index])
+}
+
+function foldCubeNet(cells: CubeNetCell[]) {
+  const cellKey = (cell: Pick<CubeNetCell, 'x' | 'y'>) => `${cell.x},${cell.y}`
+  const available = new Set(cells.map(cellKey))
+  const orientations = new Map<string, CubeOrientation>([[cellKey(cells[0]), { normal: [0, 0, 1], up: [0, -1, 0], right: [1, 0, 0] }]])
+  const queue = [cells[0]]
+  const directions = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }]
+  for (let index = 0; index < queue.length; index += 1) {
+    const cell = queue[index]; const orientation = orientations.get(cellKey(cell))!
+    for (const direction of directions) {
+      const neighbour = { x: cell.x + direction.x, y: cell.y + direction.y }; const key = cellKey(neighbour)
+      if (!available.has(key)) continue
+      const next: CubeOrientation = direction.x === 1
+        ? { normal: orientation.right, up: orientation.up, right: negateVector(orientation.normal) }
+        : direction.x === -1
+          ? { normal: negateVector(orientation.right), up: orientation.up, right: orientation.normal }
+          : direction.y === -1
+            ? { normal: orientation.up, up: negateVector(orientation.normal), right: orientation.right }
+            : { normal: negateVector(orientation.up), up: orientation.normal, right: orientation.right }
+      const existing = orientations.get(key)
+      if (existing && (!sameVector(existing.normal, next.normal) || !sameVector(existing.up, next.up) || !sameVector(existing.right, next.right))) return null
+      if (!existing) { orientations.set(key, next); queue.push(neighbour) }
+    }
+  }
+  if (orientations.size !== 6 || new Set([...orientations.values()].map((value) => vectorKey(value.normal))).size !== 6) return null
+  return orientations
+}
+
+function transformCubeNet(cells: CubeNetCell[], rng: RandomSource) {
+  const turns = rng.int(0, 3); const reflect = rng.next() < .5
+  const transformed = cells.map((cell) => {
+    let x = reflect ? -cell.x : cell.x; let y = cell.y
+    for (let turn = 0; turn < turns; turn += 1) [x, y] = [-y, x]
+    return { ...cell, x, y }
+  })
+  const minX = Math.min(...transformed.map((cell) => cell.x)); const minY = Math.min(...transformed.map((cell) => cell.y))
+  return transformed.map((cell) => ({ ...cell, x: cell.x - minX, y: cell.y - minY }))
+}
+
+function cubeNetExercise(level: number, seed: number, rng: RandomSource): Exercise {
+  const valid = transformCubeNet(rng.pick(VALID_CUBE_NETS), rng)
+  const candidateNets = rng.shuffle([valid, ...rng.shuffle(INVALID_CUBE_NETS).slice(0, 3).map((cells) => transformCubeNet(cells, rng))])
+  const options = candidateNets.map((cells, index) => ({ id: `net-${index}`, label: `Net ${index + 1}`, spatialVisual: { kind: 'cube-net' as const, cells } }))
+  const correct = options.find((option) => option.spatialVisual.cells === valid)!.id
+  return {
+    id: id('spatial', seed), family: 'spatial', variant: 'cube-net', label: 'Spatial Lab',
+    prompt: 'Which net folds into a cube without any faces overlapping?',
+    instruction: 'Mentally fold each six-square layout along its edges.', difficulty: level, responseTargetMs: level >= 9 ? 17500 : 15500,
+    answer: { kind: 'choice', value: correct }, options, visual: { kind: 'spatial-solid', solid: 'cube' },
+    explanation: `Net ${options.findIndex((option) => option.id === correct) + 1} folds to give six different face directions; the others make two faces overlap.`,
+  }
+}
+
+function oppositeFaceExercise(level: number, seed: number, rng: RandomSource): Exercise {
+  const cells = transformCubeNet(rng.pick(VALID_CUBE_NETS), rng)
+  const labels = rng.shuffle(['A', 'B', 'C', 'D', 'E', 'F'])
+  const labelled = cells.map((cell, index) => ({ ...cell, label: labels[index] }))
+  const orientations = foldCubeNet(labelled)!
+  const asked = rng.int(0, labelled.length - 1); const askedCell = labelled[asked]
+  const askedNormal = orientations.get(`${askedCell.x},${askedCell.y}`)!.normal
+  const oppositeIndex = labelled.findIndex((cell) => sameVector(orientations.get(`${cell.x},${cell.y}`)!.normal, negateVector(askedNormal)))
+  const correct = labelled[oppositeIndex].label!
+  const distractors = rng.shuffle(labelled.filter((_, index) => index !== asked && index !== oppositeIndex).map((cell) => cell.label!)).slice(0, 3)
+  return {
+    id: id('spatial', seed), family: 'spatial', variant: 'opposite-face', label: 'Spatial Lab',
+    prompt: `When this net is folded into a cube, which face is opposite ${askedCell.label}?`,
+    instruction: 'Track which faces meet as the net folds.', difficulty: level, responseTargetMs: level >= 9 ? 18000 : 16000,
+    answer: { kind: 'choice', value: correct }, options: choiceOptions(rng, correct, distractors), visual: { kind: 'cube-net', cells: labelled },
+    explanation: `Folding the net puts face ${correct} on the opposite side from ${askedCell.label}.`,
+  }
+}
+
+function angleBetweenExercise(level: number, seed: number, rng: RandomSource): Exercise {
+  const startAngle = rng.pick([0, 45, 90, 135, 180, 225, 270, 315])
+  const turns = level <= 2 ? [135, 180, 225, 270] : [45, 90, 135, 180, 225, 270, 315]
+  const clockwise = rng.next() < .5; const answer = rng.pick(turns)
+  const endAngle = normalRotation(startAngle + (clockwise ? answer : -answer))
+  const distractors = rng.shuffle([45, 90, 135, 180, 225, 270, 315].filter((value) => value !== answer)).slice(0, 3).map((value) => `${value}°`)
+  return {
+    id: id('spatial', seed), family: 'spatial', variant: 'angle-between', label: 'Spatial Lab',
+    prompt: `What is the ${clockwise ? 'clockwise' : 'anticlockwise'} turn from ray A to ray B?`,
+    instruction: 'Measure the directed turn, not just the smaller angle.', difficulty: level, responseTargetMs: level <= 2 ? 9000 : 10500,
+    answer: { kind: 'choice', value: `${answer}°` }, options: choiceOptions(rng, `${answer}°`, distractors),
+    visual: { kind: 'spatial-angle', startAngle, endAngle, clockwise }, explanation: `Following the ${clockwise ? 'clockwise' : 'anticlockwise'} arc from A to B gives ${answer}°.`
+  }
+}
+
+function angleCompositionExercise(level: number, seed: number, rng: RandomSource): Exercise {
+  const startAngle = rng.pick([0, 45, 90, 135, 180, 225, 270, 315])
+  const first = rng.pick([90, 135, 180, 225]); const second = rng.pick([45, 90, 135, 180]); const third = rng.pick([90, 135, 225, 270])
+  const finalAngle = normalRotation(startAngle + first - second + third)
+  const possible = rng.shuffle([0, 45, 90, 135, 180, 225, 270, 315].filter((value) => value !== finalAngle)).slice(0, 3).map((value) => `${value}°`)
+  return {
+    id: id('spatial', seed), family: 'spatial', variant: 'angle-composition', label: 'Spatial Lab',
+    prompt: `From ray A, turn ${first}° clockwise, ${second}° anticlockwise, then ${third}° clockwise. At what bearing do you finish?`,
+    instruction: 'Combine the signed turns and keep the result within 0°–359°.', difficulty: level, responseTargetMs: level >= 9 ? 15000 : 13500,
+    answer: { kind: 'choice', value: `${finalAngle}°` }, options: choiceOptions(rng, `${finalAngle}°`, possible),
+    visual: { kind: 'spatial-angle', startAngle, clockwise: true, label: `${startAngle}°` },
+    explanation: `${startAngle}° + ${first}° − ${second}° + ${third}° = ${startAngle + first - second + third}°, which normalises to ${finalAngle}°.`
+  }
+}
+
 function spatial(level: number, seed: number, rng: RandomSource): Exercise {
   const band = levelBand(level)
-  const available = band === 0
-    ? ['rotation', 'double-rotation']
-    : band === 1
-      ? ['rotation', 'positioned-rotation', 'reflection']
-      : band === 2
-        ? ['positioned-rotation', 'reflection', 'reflect-then-rotate', 'rotate-then-reflect', 'inverse-transform']
-        : ['reflect-then-rotate', 'rotate-then-reflect', 'inverse-transform', 'three-step-transform']
+  const available = level === 1
+    ? ['positioned-rotation', 'angle-between']
+    : level === 2
+      ? ['double-rotation', 'positioned-rotation', 'reflection', 'angle-between']
+      : band === 1
+        ? level === 5
+          ? ['double-rotation', 'positioned-rotation', 'reflection', 'angle-between', 'cube-net']
+          : ['double-rotation', 'positioned-rotation', 'reflection', 'angle-between']
+        : band === 2
+          ? ['reflect-then-rotate', 'rotate-then-reflect', 'inverse-transform', 'angle-composition', 'cube-net', 'opposite-face']
+          : ['reflect-then-rotate', 'rotate-then-reflect', 'inverse-transform', 'three-step-transform', 'angle-composition', 'cube-net', 'opposite-face']
   const variant = rng.pick(available)
-  const start: VisualToken = { shape: 'arrow', count: 1, filled: rng.next() < .5, rotation: rng.pick([0, 90, 180, 270]), position: band === 0 ? 'center' : rng.pick<SpatialPosition>(['top', 'right', 'bottom', 'left']) }
+  if (variant === 'angle-between') return angleBetweenExercise(level, seed, rng)
+  if (variant === 'angle-composition') return angleCompositionExercise(level, seed, rng)
+  if (variant === 'cube-net') return cubeNetExercise(level, seed, rng)
+  if (variant === 'opposite-face') return oppositeFaceExercise(level, seed, rng)
+  const start: VisualToken = { shape: rng.pick(['arrow', 'triangle']), count: 1, filled: rng.next() < .5, rotation: rng.pick([0, 90, 180, 270]), position: rng.pick<SpatialPosition>(['top', 'right', 'bottom', 'left']) }
   let shown = start; let answer = start; let prompt = ''; let explanation = ''; let responseTargetMs = 7500
 
   if (variant === 'rotation') {
@@ -1616,7 +1807,7 @@ function spatial(level: number, seed: number, rng: RandomSource): Exercise {
     const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); const first = rng.pick([90, 270]); const second = rng.pick([90, 180]); answer = reflectSpatialToken(rotateSpatialToken(reflectSpatialToken(start, axis), first), axis); answer = rotateSpatialToken(answer, second); prompt = `Reflect ${axis}, rotate ${first}° clockwise, reflect ${axis} again, then rotate ${second}°.`; explanation = 'Track the position and arrow direction after each of the four transformations.'; responseTargetMs = 17500
   }
   const { options, correct } = spatialOptions(rng, answer)
-  return { id: id('spatial', seed), family: 'spatial', variant, label: 'Spatial Lab', prompt, instruction: 'Track both orientation and off-centre position.', difficulty: level, responseTargetMs, answer: { kind: 'choice', value: correct }, options, visual: { kind: 'tiles', columns: 1, cells: [shown] }, explanation }
+  return { id: id('spatial', seed), family: 'spatial', variant, label: 'Spatial Lab', prompt, instruction: 'Track both the symbol direction and its highlighted edge anchor.', difficulty: level, responseTargetMs, answer: { kind: 'choice', value: correct }, options, visual: { kind: 'tiles', columns: 1, cells: [shown], positionGuide: true }, explanation }
 }
 
 function routeNeighbours(cell: number, size: number) {
@@ -1759,10 +1950,10 @@ const generators: Record<ExerciseFamily, (level: number, seed: number, rng: Rand
   constraints,
   'data-sprint': dataSprint,
   'debug-scan': debugScan,
-  'memory-grid': memoryGrid,
   'pattern-recall': patternRecall,
   'tile-sequence': tileSequence,
   'arrow-shift': arrowShift,
+  'reaction-match': reactionMatch,
   spatial,
   'route-planner': routePlanner,
 }
