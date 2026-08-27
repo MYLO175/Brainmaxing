@@ -1593,6 +1593,37 @@ function reactionMatch(level: number, seed: number, rng: RandomSource): Exercise
   }
 }
 
+function arrowFocus(level: number, seed: number, rng: RandomSource): Exercise {
+  const targetDirection = rng.pick(['left', 'right'] as const)
+  const position = rng.pick(['above', 'below'] as const)
+  const configuration = rng.pick(level <= 2
+    ? ['aligned', 'aligned', 'middle-opposite']
+    : level <= 6
+      ? ['aligned', 'middle-opposite']
+      : ['aligned', 'middle-opposite', 'middle-opposite'])
+  const flankerDirection = configuration === 'aligned'
+    ? targetDirection
+    : targetDirection === 'left' ? 'right' : 'left'
+  const directions: Array<'left' | 'right'> = [flankerDirection, flankerDirection, targetDirection, flankerDirection, flankerDirection]
+  const responseWindows = [0, 1400, 1280, 1160, 1040, 920, 820, 730, 650, 570, 500]
+  const responseTargets = [0, 680, 630, 580, 530, 480, 435, 395, 355, 320, 285]
+  const baseOnsetDelays = [0, 280, 260, 235, 215, 195, 175, 155, 140, 125, 110]
+  const onsetDelayMs = baseOnsetDelays[level] + rng.int(0, 150)
+  const responseWindowMs = responseWindows[level]
+  const responseTargetMs = responseTargets[level]
+  const variant = `${configuration}-${position}`
+  return {
+    id: id('arrow-focus', seed), family: 'arrow-focus', variant, label: 'Arrow Focus',
+    prompt: 'Which way does the middle arrow point?',
+    instruction: 'Ignore the four outside arrows. React only to the middle arrow.',
+    difficulty: level, responseTargetMs,
+    answer: { kind: 'choice', value: targetDirection },
+    options: [{ id: 'left', label: 'Left' }, { id: 'right', label: 'Right' }],
+    visual: { kind: 'arrow-focus', directions, position, onsetDelayMs, responseWindowMs },
+    explanation: `The middle arrow pointed ${targetDirection}. Faster correct reactions earn more points.`,
+  }
+}
+
 type SpatialPosition = NonNullable<VisualToken['position']>
 
 function normalRotation(value: number) {
@@ -1966,6 +1997,7 @@ const generators: Record<ExerciseFamily, (level: number, seed: number, rng: Rand
   'tile-sequence': tileSequence,
   'arrow-shift': arrowShift,
   'reaction-match': reactionMatch,
+  'arrow-focus': arrowFocus,
   spatial,
   'route-planner': routePlanner,
 }

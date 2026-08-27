@@ -29,7 +29,7 @@ const familyIcons: Record<ExerciseFamily, typeof Sigma> = {
   averages: BarChart3, rates: Gauge, powers: Zap, estimation: Target,
   sequences: TrendingUp, matrix: Grid2X2, 'rule-breaker': Eye, constraints: Binary,
   'data-sprint': Database, 'debug-scan': Target,
-  'pattern-recall': Grid2X2, 'tile-sequence': ListOrdered, 'arrow-shift': Target, 'reaction-match': Zap, spatial: RotateCw, 'route-planner': Route,
+  'pattern-recall': Grid2X2, 'tile-sequence': ListOrdered, 'arrow-shift': Target, 'reaction-match': Zap, 'arrow-focus': ArrowRight, spatial: RotateCw, 'route-planner': Route,
 }
 
 const familyDescriptions: Record<ExerciseFamily, string> = {
@@ -51,6 +51,7 @@ const familyDescriptions: Record<ExerciseFamily, string> = {
   'tile-sequence': 'Recall longer tile paths, then filter target flashes from distractors.',
   'arrow-shift': 'Compare two rapid arrow grids and isolate the relevant direction change.',
   'reaction-match': 'Wait for the centre object, then match it left or right as fast as possible.',
+  'arrow-focus': 'Ignore conflicting flankers and react to the middle arrow as fast as possible.',
   spatial: 'Rotate changing shapes, compare directed angles and fold cube nets.',
   'route-planner': 'Optimise routes through walls, waypoints and weighted cells.',
 }
@@ -76,6 +77,10 @@ function formatControlKey(key: string) {
 
 function normalizeReactionKey(key: string) {
   return key.length === 1 ? key.toLowerCase() : key
+}
+
+function isReactionFamily(family: string) {
+  return family === 'reaction-match' || family === 'arrow-focus'
 }
 
 export function rebindReactionKeys(current: { leftKey: string; rightKey: string }, side: 'left' | 'right', key: string) {
@@ -304,7 +309,7 @@ function PracticeLab({ track, families, preferences, sessions, onPreferences, on
           <div className="step-heading"><span>03</span><div><h3>Choose a timer</h3><p>Use a timed sprint or practise for as long as you like.</p></div></div>
           <div className="duration-options six-options">{DURATION_OPTIONS.map((duration) => <button key={duration} className={preferences.duration === duration ? 'selected' : ''} onClick={() => onPreferences({ ...preferences, duration })}><strong>{duration === 0 ? '∞' : duration < 60 ? duration : duration / 60}</strong><span>{duration === 0 ? 'practice' : duration < 60 ? 'sec' : 'min'}</span></button>)}</div>
         </div>
-        {selected === 'reaction-match' && <div className="builder-section reaction-controls-builder">
+        {selected !== 'mixed' && isReactionFamily(selected) && <div className="builder-section reaction-controls-builder">
           <div className="step-heading"><span>04</span><div><h3>Configure laptop keys</h3><p>Click a control, then press the key you want to use.</p></div></div>
           <div className="reaction-key-options">
             {(['left', 'right'] as const).map((side) => <button key={side} type="button" className={bindingSide === side ? 'listening' : ''} aria-pressed={bindingSide === side} onClick={() => setBindingSide(side)}>
@@ -387,6 +392,13 @@ function ReactionObject({ color, shape }: { color: string; shape: 'cog' | 'burst
   return <span className={`reaction-object shape-${shape}`} style={{ '--reaction-color': color } as CSSProperties} aria-hidden="true"><i /></span>
 }
 
+function FocusArrow({ direction }: { direction: 'left' | 'right' }) {
+  return <svg className={`focus-arrow direction-${direction}`} viewBox="0 0 100 80" aria-hidden="true">
+    <path d="M7 29 H55 V12 L94 40 L55 68 V51 H7 Z" />
+    <path className="focus-arrow-inset" d="M25 35 H65 L59 30 L70 40 L59 50 L65 45 H25 Z" />
+  </svg>
+}
+
 function CubeNetDiagram({ cells, compact = false }: { cells: CubeNetCell[]; compact?: boolean }) {
   const size = compact ? 24 : 34
   const minX = Math.min(...cells.map((cell) => cell.x)); const maxX = Math.max(...cells.map((cell) => cell.x))
@@ -442,6 +454,7 @@ function VisualPrompt({ visual, hidden = false }: { visual: VisualSpec; hidden?:
   if (visual.kind === 'sequence') return <div className="sequence-board static" style={{ gridTemplateColumns: `repeat(${visual.size}, 1fr)` }}>{Array.from({ length: visual.size * visual.size }, (_, index) => <span key={index}>{index + 1}</span>)}</div>
   if (visual.kind === 'arrow-shift') return <div className="arrow-board static">{Array.from({ length: 25 }, (_, index) => { const item = visual.after.find((candidate) => candidate.cell === index); return <span key={index}>{item && <ArrowMark direction={item.direction} cue={item.cue} />}</span> })}</div>
   if (visual.kind === 'reaction-match') return <div className="reaction-static"><ReactionObject color={visual.leftColor} shape={visual.shape} /><ReactionObject color={visual.targetSide === 'left' ? visual.leftColor : visual.rightColor} shape={visual.shape} /><ReactionObject color={visual.rightColor} shape={visual.shape} /></div>
+  if (visual.kind === 'arrow-focus') return <div className={`focus-static position-${visual.position}`}>{visual.directions.map((direction, index) => <FocusArrow key={index} direction={direction} />)}</div>
   if (visual.kind === 'spatial-angle') return <SpatialAngleDiagram visual={visual} />
   if (visual.kind === 'cube-net') return <div className="cube-net-card"><CubeNetDiagram cells={visual.cells} /></div>
   if (visual.kind === 'spatial-solid') return <div className="spatial-solid-card"><SpatialSolid /></div>
@@ -545,6 +558,89 @@ function ReactionMatch({ exercise, onAnswer, feedback, disabled, controls }: { e
       {phase === 'target' && !feedback && <i className="reaction-deadline" aria-hidden="true" />}
     </div>
     <p className="reaction-help">On touch devices, tap anywhere in the left or right half. Pressing before the centre appears fails the round.</p>
+  </div>
+}
+
+function ArrowFocus({ exercise, onAnswer, feedback, disabled, controls }: { exercise: Exercise; onAnswer: ReactionAnswer; feedback?: 'correct' | 'incorrect' | null; disabled: boolean; controls?: { leftKey: string; rightKey: string } }) {
+  if (exercise.visual?.kind !== 'arrow-focus' || exercise.answer.kind !== 'choice') return null
+  const { directions, position, onsetDelayMs, responseWindowMs } = exercise.visual
+  const targetDirection = directions[2]
+  const leftKey = normalizeReactionKey(controls?.leftKey || 'ArrowLeft')
+  const rightKey = normalizeReactionKey(controls?.rightKey || 'ArrowRight')
+  const [phase, setPhase] = useState<'ready' | 'stimulus'>('ready')
+  const [outcome, setOutcome] = useState<'early' | 'timeout' | 'left' | 'right' | null>(null)
+  const [reactionMs, setReactionMs] = useState<number | null>(null)
+  const [points, setPoints] = useState(0)
+  const revealAt = useRef(0)
+  const responded = useRef(false)
+
+  useEffect(() => {
+    if (disabled || phase !== 'ready' || responded.current) return
+    const timer = window.setTimeout(() => {
+      revealAt.current = performance.now()
+      setPhase('stimulus')
+    }, onsetDelayMs)
+    return () => window.clearTimeout(timer)
+  }, [disabled, onsetDelayMs, phase])
+
+  const respond = useCallback((direction: 'left' | 'right') => {
+    if (disabled || responded.current) return
+    responded.current = true
+    if (phase !== 'stimulus') {
+      setOutcome('early')
+      setReactionMs(0)
+      onAnswer('early', 0, 0)
+      return
+    }
+    const elapsed = Math.max(1, Math.round(performance.now() - revealAt.current))
+    const correct = direction === targetDirection
+    const awarded = correct ? Math.max(100, Math.round(1000 - Math.min(1, elapsed / responseWindowMs) * 900)) : 0
+    setOutcome(direction)
+    setReactionMs(elapsed)
+    setPoints(awarded)
+    onAnswer(direction, elapsed, awarded)
+  }, [disabled, onAnswer, phase, responseWindowMs, targetDirection])
+
+  useEffect(() => {
+    if (disabled || phase !== 'stimulus' || responded.current) return
+    const timer = window.setTimeout(() => {
+      if (responded.current) return
+      responded.current = true
+      setOutcome('timeout')
+      setReactionMs(responseWindowMs)
+      onAnswer('timeout', responseWindowMs, 0)
+    }, responseWindowMs)
+    return () => window.clearTimeout(timer)
+  }, [disabled, onAnswer, phase, responseWindowMs])
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (disabled || responded.current || event.repeat) return
+      const pressedKey = normalizeReactionKey(event.key)
+      if (pressedKey !== leftKey && pressedKey !== rightKey) return
+      event.preventDefault()
+      respond(pressedKey === leftKey ? 'left' : 'right')
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [disabled, leftKey, respond, rightKey])
+
+  const status = feedback === 'correct'
+    ? `+${points} points · ${reactionMs} ms`
+    : feedback === 'incorrect'
+      ? outcome === 'early' ? 'Too early · wait for the arrows' : outcome === 'timeout' ? 'Too slow · time expired' : `${reactionMs} ms · wrong direction`
+      : phase === 'stimulus' ? 'React now' : 'Get ready'
+
+  return <div className={`focus-reaction-stage phase-${phase} ${feedback || ''}`} style={{ '--reaction-window': `${responseWindowMs}ms` } as CSSProperties}>
+    <p className="reaction-status" aria-live="polite">{status}</p>
+    <h1>{phase === 'stimulus' || feedback ? 'Follow the middle arrow.' : 'Get ready.'}</h1>
+    <div className={`focus-reaction-arena position-${position}`} aria-label="Arrow Focus: choose the direction of the middle arrow and ignore the four outside arrows.">
+      <button type="button" className="focus-tap-zone left" disabled={disabled} onPointerDown={() => respond('left')} onClick={() => respond('left')} aria-label={`Choose left. Keyboard: ${formatControlKey(leftKey)}`}><span>Left <kbd>{formatControlKey(leftKey)}</kbd></span></button>
+      <div className={`focus-arrow-row ${phase === 'stimulus' || feedback ? 'visible' : ''}`} aria-live="off">{directions.map((direction, index) => <FocusArrow key={index} direction={direction} />)}</div>
+      <button type="button" className="focus-tap-zone right" disabled={disabled} onPointerDown={() => respond('right')} onClick={() => respond('right')} aria-label={`Choose right. Keyboard: ${formatControlKey(rightKey)}`}><span>Right <kbd>{formatControlKey(rightKey)}</kbd></span></button>
+      {phase === 'stimulus' && !feedback && <i className="reaction-deadline" aria-hidden="true" />}
+    </div>
+    <p className="reaction-help">Ignore the four outside arrows. On touch devices, tap the left or right half of the screen.</p>
   </div>
 }
 
@@ -841,6 +937,7 @@ function ExercisePrompt({ exercise, onAnswer, value, onValue, feedback, disabled
   if (exercise.answer.kind === 'sequence') return <SequenceRecall exercise={exercise} onAnswer={onAnswer} disabled={disabled} />
   if (exercise.answer.kind === 'cell') return <ArrowShift exercise={exercise} onAnswer={onAnswer} feedback={feedback} disabled={disabled} />
   if (exercise.visual?.kind === 'reaction-match') return <ReactionMatch exercise={exercise} onAnswer={onAnswer} feedback={feedback} disabled={disabled} controls={controls} />
+  if (exercise.visual?.kind === 'arrow-focus') return <ArrowFocus exercise={exercise} onAnswer={onAnswer} feedback={feedback} disabled={disabled} controls={controls} />
   if (delayedRecall && !memoryHidden) return <>{exercise.visual && <VisualPrompt visual={exercise.visual} />}<p className="recall-status">Memorise the information. The question will appear when it is hidden.</p></>
   return <>{exercise.visual && <VisualPrompt visual={exercise.visual} hidden={memoryHidden} />}<p className="exercise-instruction">{exercise.instruction}</p><h1 className={promptClass}>{exercise.prompt}</h1>{exercise.answer.kind === 'number' ? <form className="answer-form" onSubmit={submit}><div className="answer-wrap"><input autoFocus value={value} disabled={disabled} inputMode="decimal" onChange={(event) => onValue(event.target.value.replace(/[^0-9.\-]/g, ''))} placeholder="?" />{feedback && <span className="answer-feedback-icon">{feedback === 'correct' ? <Check size={26} /> : <X size={26} />}</span>}</div><button disabled={!value.trim() || disabled}>Submit <span>↵</span></button></form> : <div className={choiceClass}>{exercise.options?.map((option, index) => <button key={option.id} disabled={disabled} onClick={() => onAnswer(option.id)}>{option.visual ? <Glyph token={option.visual} size={54} positionGuide={exercise.family === 'spatial'} /> : option.spatialVisual ? <SpatialChoiceVisual visual={option.spatialVisual} /> : <span>{option.label}</span>}<kbd>{index + 1}</kbd></button>)}</div>}</>
 }
@@ -894,15 +991,15 @@ function PracticeSession({ config, onFinish, onExit }: { config: SessionConfig; 
     setFeedback(null)
     questionStartedAt.current = Date.now()
   }, [config.families, counter, sessionSeed])
-  const answer: ReactionAnswer = (given, responseMsOverride, points) => { if (feedback || paused) return; const correct = isCorrect(exercise, given); const responseMs = responseMsOverride ?? Date.now() - questionStartedAt.current; const attempt: Attempt = { exercise, given, correct, skipped: false, responseMs, points }; const updated = [...attemptsRef.current, attempt]; attemptsRef.current = updated; setAttempts(updated); setFeedback(correct ? 'correct' : 'incorrect'); setStreak((current) => correct ? current + 1 : 0); const nextLevels = { ...levels }; if (config.difficulty === 'Adaptive') { if (correct && responseMs < exercise.responseTargetMs) nextLevels[exercise.family] = Math.min(10, levels[exercise.family] + 1); if (!correct) nextLevels[exercise.family] = Math.max(1, levels[exercise.family] - 1); setLevels(nextLevels) } const feedbackMs = exercise.answer.kind === 'sequence' && !correct ? 950 : exercise.answer.kind === 'cell' ? 1100 : exercise.family === 'reaction-match' ? correct ? 850 : 1050 : correct ? 650 : 1200; window.setTimeout(() => next(nextLevels), feedbackMs) }
-  useEffect(() => { const handler = (event: KeyboardEvent) => { if (exercise.answer.kind !== 'choice' || exercise.visual?.kind === 'reaction-match' || feedback || paused) return; const option = exercise.options?.[Number(event.key) - 1]; if (option) answer(option.id) }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) })
+  const answer: ReactionAnswer = (given, responseMsOverride, points) => { if (feedback || paused) return; const correct = isCorrect(exercise, given); const responseMs = responseMsOverride ?? Date.now() - questionStartedAt.current; const attempt: Attempt = { exercise, given, correct, skipped: false, responseMs, points }; const updated = [...attemptsRef.current, attempt]; attemptsRef.current = updated; setAttempts(updated); setFeedback(correct ? 'correct' : 'incorrect'); setStreak((current) => correct ? current + 1 : 0); const nextLevels = { ...levels }; if (config.difficulty === 'Adaptive') { if (correct && responseMs < exercise.responseTargetMs) nextLevels[exercise.family] = Math.min(10, levels[exercise.family] + 1); if (!correct) nextLevels[exercise.family] = Math.max(1, levels[exercise.family] - 1); setLevels(nextLevels) } const feedbackMs = exercise.answer.kind === 'sequence' && !correct ? 950 : exercise.answer.kind === 'cell' ? 1100 : isReactionFamily(exercise.family) ? correct ? 850 : 1050 : correct ? 650 : 1200; window.setTimeout(() => next(nextLevels), feedbackMs) }
+  useEffect(() => { const handler = (event: KeyboardEvent) => { if (exercise.answer.kind !== 'choice' || exercise.visual?.kind === 'reaction-match' || exercise.visual?.kind === 'arrow-focus' || feedback || paused) return; const option = exercise.options?.[Number(event.key) - 1]; if (option) answer(option.id) }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) })
   const correctCount = attempts.filter((attempt) => attempt.correct).length
-  const reactionOnly = config.families.length === 1 && config.families[0] === 'reaction-match'
+  const reactionOnly = config.families.length === 1 && isReactionFamily(config.families[0])
   const reactionPoints = attempts.reduce((sum, attempt) => sum + (attempt.points || 0), 0)
   return <div className="session-screen">
     {!untimed && <div className="session-progress" style={{ width: `${(config.duration - remaining) / config.duration * 100}%` }} />}
     <header className="session-header"><Brand /><div className="session-label"><span className="pulse-dot" /> {config.label} · {config.difficulty}{untimed ? ' · Practice' : ''}</div><div className="session-header-actions">{untimed && <button className="finish-practice-button" aria-label="Finish practice" disabled={!attempts.length} onClick={finish}><Check size={14} /><span>Finish practice</span></button>}<button className="pause-button" onClick={() => setPaused((current) => !current)}>{paused ? <Play size={14} /> : 'Ⅱ'} {paused ? 'Resume' : 'Pause'}</button><button className="icon-button" onClick={onExit}><X size={20} /></button></div></header>
-    <main className={`session-main ${feedback || ''}`}><div className="session-metric left-metric"><span><Flame size={18} /> Streak</span><strong>{streak}</strong><small>{streak >= 5 ? 'On fire' : 'Build momentum'}</small></div><div className="session-metric right-metric">{reactionOnly ? <><span><Zap size={18} /> Points</span><strong>{reactionPoints}</strong><small>Speed-weighted total</small></> : <><span><Target size={18} /> Accuracy</span><strong>{attempts.length ? Math.round(correctCount / attempts.length * 100) : 100}%</strong><small>{correctCount} of {attempts.length} correct</small></>}</div><section className="question-area exercise-question-area"><div className={`timer-display ${untimed ? 'practice-timer' : ''}`}><Clock3 size={18} /><span>{formatTime(untimed ? elapsed : remaining)}</span>{untimed && <small>elapsed</small>}</div><p className="question-count">{exercise.label} <span>·</span> Level {levels[exercise.family]} <span>·</span> {levelName(levels[exercise.family])}</p><ExercisePrompt key={exercise.id} exercise={exercise} onAnswer={answer} value={value} onValue={setValue} feedback={feedback} disabled={paused || !!feedback} controls={config.controls} /><div className={`feedback-copy explanation ${feedback ? 'show' : ''}`}>{feedback === 'correct' ? `Correct. ${exercise.explanation}` : feedback === 'incorrect' ? `Not quite. ${exercise.explanation}` : ''}</div></section><div className="session-footer-note"><Keyboard size={15} /> {exercise.family === 'reaction-match' ? `Use ${formatControlKey(config.controls?.leftKey || 'ArrowLeft')} / ${formatControlKey(config.controls?.rightKey || 'ArrowRight')} or tap a side` : 'Use the keyboard or click an answer'}</div></main>
+    <main className={`session-main ${feedback || ''}`}><div className="session-metric left-metric"><span><Flame size={18} /> Streak</span><strong>{streak}</strong><small>{streak >= 5 ? 'On fire' : 'Build momentum'}</small></div><div className="session-metric right-metric">{reactionOnly ? <><span><Zap size={18} /> Points</span><strong>{reactionPoints}</strong><small>Speed-weighted total</small></> : <><span><Target size={18} /> Accuracy</span><strong>{attempts.length ? Math.round(correctCount / attempts.length * 100) : 100}%</strong><small>{correctCount} of {attempts.length} correct</small></>}</div><section className="question-area exercise-question-area"><div className={`timer-display ${untimed ? 'practice-timer' : ''}`}><Clock3 size={18} /><span>{formatTime(untimed ? elapsed : remaining)}</span>{untimed && <small>elapsed</small>}</div><p className="question-count">{exercise.label} <span>·</span> Level {levels[exercise.family]} <span>·</span> {levelName(levels[exercise.family])}</p><ExercisePrompt key={exercise.id} exercise={exercise} onAnswer={answer} value={value} onValue={setValue} feedback={feedback} disabled={paused || !!feedback} controls={config.controls} /><div className={`feedback-copy explanation ${feedback ? 'show' : ''}`}>{feedback === 'correct' ? `Correct. ${exercise.explanation}` : feedback === 'incorrect' ? `Not quite. ${exercise.explanation}` : ''}</div></section><div className="session-footer-note"><Keyboard size={15} /> {isReactionFamily(exercise.family) ? `Use ${formatControlKey(config.controls?.leftKey || 'ArrowLeft')} / ${formatControlKey(config.controls?.rightKey || 'ArrowRight')} or tap a side` : 'Use the keyboard or click an answer'}</div></main>
     {paused && <div className="pause-overlay"><div className="pause-card"><TimerReset size={28} /><p>Session paused</p><h2>Catch your breath.</h2><button className="primary-button dark" onClick={() => { setPaused(false); questionStartedAt.current = Date.now() }}>Resume drill <Play size={16} /></button></div></div>}
   </div>
 }
@@ -930,10 +1027,11 @@ function AssessmentSession({ onFinish, onExit }: { onFinish: (config: SessionCon
 
 function Results({ result, attempts, onHome, onRetry }: { result: SessionResult; attempts: Attempt[]; onHome: () => void; onRetry: () => void }) {
   const accuracy = result.total ? Math.round(result.correct / result.total * 100) : 0
-  const reactionOnlyResult = Object.keys(result.breakdown).length === 1 && !!result.breakdown['reaction-match']
+  const resultFamilies = Object.keys(result.breakdown)
+  const reactionOnlyResult = resultFamilies.length === 1 && isReactionFamily(resultFamilies[0])
   const missed = attempts.filter((attempt) => !attempt.correct).slice(0, 5)
   const formatGiven = (attempt: Attempt) => Array.isArray(attempt.given) ? attempt.given.map((cell) => cell + 1).join(attempt.exercise.answer.kind === 'cells' ? ', ' : ' → ') : attempt.exercise.answer.kind === 'cell' && typeof attempt.given === 'number' ? `Tile ${attempt.given + 1}` : attempt.given
-  return <div className="results-screen"><header className="results-header"><Brand /><button className="text-button" onClick={onHome}>Back to home <X size={16} /></button></header><main className="results-content"><div className="results-kicker"><span><Trophy size={18} /></span> {result.track === 'assessment' ? 'Assessment complete' : result.configuredDuration === 0 ? 'Practice complete' : 'Drill complete'}</div><h1>{accuracy >= 85 ? 'Exceptionally sharp.' : accuracy >= 70 ? 'Strong work.' : accuracy >= 50 ? 'Momentum built.' : 'Baseline captured.'}</h1><p>{result.track === 'assessment' ? 'This is a personal practice score, not a commercial assessment percentile.' : 'Immediate feedback turns each rep into useful practice.'}</p><section className="score-panel"><div className="score-main"><p>Performance score</p><div><strong>{result.score}</strong><span>/100</span></div><small>Personal training metric</small></div><div className="score-metrics"><div><span className="result-icon mint"><Target size={19} /></span><p>Accuracy</p><strong>{accuracy}%</strong><small>{result.correct} / {result.total} correct</small></div><div><span className="result-icon yellow"><Zap size={19} /></span><p>Median response</p><strong>{result.medianMs ? reactionOnlyResult ? `${result.medianMs}ms` : `${(result.medianMs / 1000).toFixed(1)}s` : '—'}</strong><small>Answered items</small></div><div><span className="result-icon pink">{reactionOnlyResult ? <Gauge size={19} /> : <ArrowRight size={19} />}</span><p>{reactionOnlyResult ? 'Reaction points' : 'Skipped'}</p><strong>{reactionOnlyResult ? result.points || 0 : result.skipped}</strong><small>{reactionOnlyResult ? 'Speed-weighted total' : 'Unanswered'}</small></div></div></section><section className="breakdown-panel"><div className="panel-heading"><div><p className="eyebrow">Skill breakdown</p><h3>Where the session landed</h3></div></div><div className="breakdown-grid">{Object.entries(result.breakdown).map(([family, raw]) => { const item = raw as SkillBreakdown; return <div key={family}><strong>{FAMILY_LABELS[family as ExerciseFamily]}</strong><span>{item.attempted ? Math.round(item.correct / item.attempted * 100) : 0}%</span><small>{item.correct}/{item.attempted} correct · {item.medianMs ? family === 'reaction-match' ? `${item.medianMs}ms` : `${(item.medianMs / 1000).toFixed(1)}s` : '—'} median</small></div> })}</div></section><div className="results-lower"><section className="review-panel"><div className="panel-heading"><div><p className="eyebrow">Quick review</p><h3>{missed.length ? 'Worth another look' : 'A perfect run'}</h3></div><span>{missed.length} shown</span></div><div className="missed-list rich-review">{missed.map((attempt) => <div key={attempt.exercise.id}><span>{attempt.exercise.prompt.replace('\n', ' / ')}</span><i>{attempt.skipped ? 'Skipped' : `Your answer: ${formatGiven(attempt)}`}</i><strong>{attempt.exercise.explanation}</strong></div>)}</div></section><section className="next-panel"><p className="eyebrow">Next move</p><h3>Lock it in with one more.</h3><p>Repeat the same configuration or return to choose another skill.</p><button className="primary-button dark wide" onClick={onRetry}><TimerReset size={17} /> Run it again</button><button className="text-button centered" onClick={onHome}>Finish for now</button></section></div></main></div>
+  return <div className="results-screen"><header className="results-header"><Brand /><button className="text-button" onClick={onHome}>Back to home <X size={16} /></button></header><main className="results-content"><div className="results-kicker"><span><Trophy size={18} /></span> {result.track === 'assessment' ? 'Assessment complete' : result.configuredDuration === 0 ? 'Practice complete' : 'Drill complete'}</div><h1>{accuracy >= 85 ? 'Exceptionally sharp.' : accuracy >= 70 ? 'Strong work.' : accuracy >= 50 ? 'Momentum built.' : 'Baseline captured.'}</h1><p>{result.track === 'assessment' ? 'This is a personal practice score, not a commercial assessment percentile.' : 'Immediate feedback turns each rep into useful practice.'}</p><section className="score-panel"><div className="score-main"><p>Performance score</p><div><strong>{result.score}</strong><span>/100</span></div><small>Personal training metric</small></div><div className="score-metrics"><div><span className="result-icon mint"><Target size={19} /></span><p>Accuracy</p><strong>{accuracy}%</strong><small>{result.correct} / {result.total} correct</small></div><div><span className="result-icon yellow"><Zap size={19} /></span><p>Median response</p><strong>{result.medianMs ? reactionOnlyResult ? `${result.medianMs}ms` : `${(result.medianMs / 1000).toFixed(1)}s` : '—'}</strong><small>Answered items</small></div><div><span className="result-icon pink">{reactionOnlyResult ? <Gauge size={19} /> : <ArrowRight size={19} />}</span><p>{reactionOnlyResult ? 'Reaction points' : 'Skipped'}</p><strong>{reactionOnlyResult ? result.points || 0 : result.skipped}</strong><small>{reactionOnlyResult ? 'Speed-weighted total' : 'Unanswered'}</small></div></div></section><section className="breakdown-panel"><div className="panel-heading"><div><p className="eyebrow">Skill breakdown</p><h3>Where the session landed</h3></div></div><div className="breakdown-grid">{Object.entries(result.breakdown).map(([family, raw]) => { const item = raw as SkillBreakdown; return <div key={family}><strong>{FAMILY_LABELS[family as ExerciseFamily]}</strong><span>{item.attempted ? Math.round(item.correct / item.attempted * 100) : 0}%</span><small>{item.correct}/{item.attempted} correct · {item.medianMs ? isReactionFamily(family) ? `${item.medianMs}ms` : `${(item.medianMs / 1000).toFixed(1)}s` : '—'} median</small></div> })}</div></section><div className="results-lower"><section className="review-panel"><div className="panel-heading"><div><p className="eyebrow">Quick review</p><h3>{missed.length ? 'Worth another look' : 'A perfect run'}</h3></div><span>{missed.length} shown</span></div><div className="missed-list rich-review">{missed.map((attempt) => <div key={attempt.exercise.id}><span>{attempt.exercise.prompt.replace('\n', ' / ')}</span><i>{attempt.skipped ? 'Skipped' : `Your answer: ${formatGiven(attempt)}`}</i><strong>{attempt.exercise.explanation}</strong></div>)}</div></section><section className="next-panel"><p className="eyebrow">Next move</p><h3>Lock it in with one more.</h3><p>Repeat the same configuration or return to choose another skill.</p><button className="primary-button dark wide" onClick={onRetry}><TimerReset size={17} /> Run it again</button><button className="text-button centered" onClick={onHome}>Finish for now</button></section></div></main></div>
 }
 
 function ProgressPage({ sessions, onStart }: { sessions: SessionResult[]; onStart: () => void }) {

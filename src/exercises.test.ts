@@ -59,7 +59,7 @@ describe('exercise generators', () => {
     powers: ['square', 'cube', 'square-root', 'cube-root', 'powers-of-ten', 'remainder', 'divisibility', 'exponent-product', 'exponent-quotient', 'scientific-multiplication', 'combined-root-power', 'last-digit-power'],
     estimation: ['product', 'sum', 'difference', 'quotient', 'order-of-magnitude', 'percentage-estimate', 'multi-step-estimate', 'budget-estimate'],
     sequences: [], matrix: [], 'rule-breaker': [], constraints: [], 'data-sprint': [],
-    'debug-scan': [], 'pattern-recall': [], 'tile-sequence': [], 'arrow-shift': [], 'reaction-match': [], spatial: [], 'route-planner': [],
+    'debug-scan': [], 'pattern-recall': [], 'tile-sequence': [], 'arrow-shift': [], 'reaction-match': [], 'arrow-focus': [], spatial: [], 'route-planner': [],
   }
 
   const logicVariants: Partial<Record<ExerciseFamily, string[]>> = {
@@ -149,6 +149,7 @@ describe('exercise generators', () => {
     'tile-sequence': ['short-unique', 'corner-centre', 'wide-jumps', 'revisit', 'interleaved-return', 'large-grid-scan', 'target-filter', 'target-filter-return', 'target-filter-rapid'],
     'arrow-shift': ['cardinal-shift', 'mixed-angle-shift', 'dense-shift', 'colour-filter', 'colour-filter-multiple', 'colour-filter-rapid'],
     'reaction-match': ['cog-match', 'burst-match', 'orb-match', 'cog-rush', 'burst-rush', 'orb-rush'],
+    'arrow-focus': ['aligned-above', 'aligned-below', 'middle-opposite-above', 'middle-opposite-below'],
     spatial: ['double-rotation', 'positioned-rotation', 'reflection', 'reflect-then-rotate', 'rotate-then-reflect', 'inverse-transform', 'three-step-transform', 'angle-between', 'angle-composition', 'cube-net', 'opposite-face'],
     'route-planner': ['open-grid', 'light-obstacles', 'single-wall', 'checkpoint', 'ordered-checkpoints', 'choose-order', 'double-wall', 'weighted-route'],
   }
@@ -194,7 +195,7 @@ describe('exercise generators', () => {
 
   it.each(COGNITIVE_FAMILIES)('%s gives expert tasks more calibrated working time', (family) => {
     const averageTarget = (level: number) => Array.from({ length: 700 }, (_, seed) => generateExercise(family, level, seed + 1).responseTargetMs).reduce((sum, value) => sum + value, 0) / 700
-    if (family === 'reaction-match') expect(averageTarget(9)).toBeLessThan(averageTarget(2))
+    if (family === 'reaction-match' || family === 'arrow-focus') expect(averageTarget(9)).toBeLessThan(averageTarget(2))
     else expect(averageTarget(9)).toBeGreaterThan(averageTarget(2))
   })
 
@@ -223,6 +224,36 @@ describe('exercise generators', () => {
       sidePairs.add(`${round.visual.leftColor}/${round.visual.rightColor}`)
     }
     expect(sidePairs.size).toBe(2)
+  })
+
+  it('limits Arrow Focus to aligned rows or a single opposite middle arrow', () => {
+    const rounds = Array.from({ length: 500 }, (_, seed) => generateExercise('arrow-focus', 7, seed + 1))
+    const positions = new Set<string>()
+    const configurations = new Set<string>()
+    for (const round of rounds) {
+      expect(round.visual?.kind).toBe('arrow-focus')
+      expect(round.answer.kind).toBe('choice')
+      if (round.visual?.kind !== 'arrow-focus' || round.answer.kind !== 'choice') continue
+      const { directions, position } = round.visual
+      expect(directions).toHaveLength(5)
+      expect(directions[2]).toBe(round.answer.value)
+      const allAligned = directions.every((direction) => direction === directions[2])
+      const onlyMiddleOpposite = directions.every((direction, index) => index === 2 || direction !== directions[2])
+      expect(allAligned || onlyMiddleOpposite).toBe(true)
+      positions.add(position)
+      configurations.add(allAligned ? 'aligned' : 'middle-opposite')
+    }
+    expect(positions).toEqual(new Set(['above', 'below']))
+    expect(configurations).toEqual(new Set(['aligned', 'middle-opposite']))
+  })
+
+  it('tightens the Arrow Focus response window as difficulty rises', () => {
+    const foundation = generateExercise('arrow-focus', 2, 41)
+    const expert = generateExercise('arrow-focus', 9, 41)
+    expect(foundation.visual?.kind).toBe('arrow-focus')
+    expect(expert.visual?.kind).toBe('arrow-focus')
+    if (foundation.visual?.kind !== 'arrow-focus' || expert.visual?.kind !== 'arrow-focus') return
+    expect(expert.visual.responseWindowMs).toBeLessThan(foundation.visual.responseWindowMs)
   })
 
   it('starts Spatial Lab with directed angles or off-centre transforms instead of single centred turns', () => {
