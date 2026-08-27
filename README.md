@@ -57,3 +57,11 @@ npm run mac:build
 
 The build-only app is written to
 `/private/tmp/brainmax-native-build/Brainmax.app`.
+
+## License
+
+Copyright © 2026 Mylo. All rights reserved.
+
+The source code is publicly viewable for demonstration purposes only.
+No permission is granted to copy, modify, distribute, or use it without
+explicit written permission.
