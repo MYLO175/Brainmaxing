@@ -1,4 +1,4 @@
-import { FormEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, BarChart3, Binary, BrainCircuit, Check, ChevronRight,
   CircleDot, Clock3, Database, Eye, Flame, Gauge, Grid2X2, Home, Keyboard,
@@ -72,6 +72,18 @@ function shortDurationSetting(seconds: number) {
 function formatControlKey(key: string) {
   const labels: Record<string, string> = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', ' ': 'Space' }
   return labels[key] || (key.length === 1 ? key.toUpperCase() : key)
+}
+
+function normalizeReactionKey(key: string) {
+  return key.length === 1 ? key.toLowerCase() : key
+}
+
+export function rebindReactionKeys(current: { leftKey: string; rightKey: string }, side: 'left' | 'right', key: string) {
+  const nextKey = normalizeReactionKey(key)
+  const leftKey = normalizeReactionKey(current.leftKey)
+  const rightKey = normalizeReactionKey(current.rightKey)
+  if (side === 'left') return { leftKey: nextKey, rightKey: nextKey === rightKey ? leftKey : rightKey }
+  return { leftKey: nextKey === leftKey ? rightKey : leftKey, rightKey: nextKey }
 }
 
 function resultDurationSetting(session: SessionResult) {
@@ -158,8 +170,8 @@ function loadPreferences(): Preferences {
     return {
       difficulty: DIFFICULTIES.includes(value?.difficulty) ? value.difficulty : 'Adaptive',
       duration: DURATION_OPTIONS.includes(value?.duration) ? value.duration : 60,
-      reactionLeftKey: typeof value?.reactionLeftKey === 'string' ? value.reactionLeftKey : 'ArrowLeft',
-      reactionRightKey: typeof value?.reactionRightKey === 'string' ? value.reactionRightKey : 'ArrowRight',
+      reactionLeftKey: typeof value?.reactionLeftKey === 'string' ? normalizeReactionKey(value.reactionLeftKey) : 'ArrowLeft',
+      reactionRightKey: typeof value?.reactionRightKey === 'string' ? normalizeReactionKey(value.reactionRightKey) : 'ArrowRight',
     }
   } catch { return { difficulty: 'Adaptive', duration: 60, reactionLeftKey: 'ArrowLeft', reactionRightKey: 'ArrowRight' } }
 }
@@ -246,19 +258,28 @@ function PracticeLab({ track, families, preferences, sessions, onPreferences, on
   const recordLabel = selected === 'mixed' ? `${title} mix` : FAMILY_LABELS[selected]
   const currentBest = bestCorrectRecord(sessions, track, recordLabel, preferences.difficulty, preferences.duration)
   const untimed = preferences.duration === 0
-  const bindReactionKey = (side: 'left' | 'right', event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    if (bindingSide !== side || ['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(event.key)) return
-    event.preventDefault()
-    if (event.key === 'Escape') { setBindingSide(null); return }
-    const ownKey = side === 'left' ? preferences.reactionLeftKey : preferences.reactionRightKey
-    const otherKey = side === 'left' ? preferences.reactionRightKey : preferences.reactionLeftKey
-    onPreferences({
-      ...preferences,
-      reactionLeftKey: side === 'left' ? event.key : event.key === otherKey ? ownKey : preferences.reactionLeftKey,
-      reactionRightKey: side === 'right' ? event.key : event.key === otherKey ? ownKey : preferences.reactionRightKey,
-    })
-    setBindingSide(null)
-  }
+
+  useEffect(() => {
+    if (!bindingSide) return
+    const captureBinding = (event: KeyboardEvent) => {
+      if (['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(event.key) || event.repeat) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.key === 'Escape') {
+        setBindingSide(null)
+        return
+      }
+      const next = rebindReactionKeys(
+        { leftKey: preferences.reactionLeftKey, rightKey: preferences.reactionRightKey },
+        bindingSide,
+        event.key,
+      )
+      onPreferences({ ...preferences, reactionLeftKey: next.leftKey, reactionRightKey: next.rightKey })
+      setBindingSide(null)
+    }
+    window.addEventListener('keydown', captureBinding, true)
+    return () => window.removeEventListener('keydown', captureBinding, true)
+  }, [bindingSide, onPreferences, preferences])
 
   return <div className="page practice-page">
     <section className="page-intro">
@@ -286,7 +307,7 @@ function PracticeLab({ track, families, preferences, sessions, onPreferences, on
         {selected === 'reaction-match' && <div className="builder-section reaction-controls-builder">
           <div className="step-heading"><span>04</span><div><h3>Configure laptop keys</h3><p>Click a control, then press the key you want to use.</p></div></div>
           <div className="reaction-key-options">
-            {(['left', 'right'] as const).map((side) => <button key={side} type="button" className={bindingSide === side ? 'listening' : ''} onClick={() => setBindingSide(side)} onKeyDown={(event) => bindReactionKey(side, event)}>
+            {(['left', 'right'] as const).map((side) => <button key={side} type="button" className={bindingSide === side ? 'listening' : ''} aria-pressed={bindingSide === side} onClick={() => setBindingSide(side)}>
               <span>{side === 'left' ? 'Left match' : 'Right match'}</span>
               <kbd>{bindingSide === side ? 'Press a key…' : formatControlKey(side === 'left' ? preferences.reactionLeftKey : preferences.reactionRightKey)}</kbd>
             </button>)}
@@ -337,9 +358,13 @@ function Glyph({ token, size = 64, positionGuide = false }: { token: VisualToken
   const anchors: Array<{ position: NonNullable<VisualToken['position']>; x: number; y: number }> = [
     { position: 'center', x: 50, y: 50 }, { position: 'top', x: 50, y: 23 }, { position: 'right', x: 77, y: 50 }, { position: 'bottom', x: 50, y: 77 }, { position: 'left', x: 23, y: 50 },
   ]
+  const activeAnchor = anchors.find((anchor) => anchor.position === (token.position || 'center'))!
   return <svg className={`glyph ${positionGuide ? 'position-guided' : ''}`} viewBox="0 0 100 100" width={size} height={size} aria-hidden="true">{positionGuide && <g className="position-guide">
     <line x1="23" y1="50" x2="77" y2="50" /><line x1="50" y1="23" x2="50" y2="77" />
-    {anchors.map((anchor) => <circle key={anchor.position} className={anchor.position === (token.position || 'center') ? 'active' : ''} cx={anchor.x} cy={anchor.y} r={anchor.position === (token.position || 'center') ? 4.8 : 2.8} />)}
+    {anchors.map((anchor) => {
+      const active = anchor.position === (token.position || 'center')
+      return <circle key={anchor.position} className={active ? 'active' : ''} cx={anchor.x} cy={anchor.y} r={active ? 22 : 2.8} style={{ fill: active ? '#e6ff8b' : '#d5d6ce', stroke: active ? '#28594b' : '#fffef9', strokeWidth: active ? 1.8 : 1.4 }} />
+    })}
   </g>}{centers.slice(0, count).map(([x, y], index) => <g key={index} transform={`rotate(${token.rotation || 0} ${x} ${y})`}>
     {token.shape === 'circle' ? <circle cx={x} cy={y} r="12" {...common} />
       : token.shape === 'square' ? <rect x={x - 12} y={y - 12} width="24" height="24" rx="2" {...common} />
@@ -347,7 +372,7 @@ function Glyph({ token, size = 64, positionGuide = false }: { token: VisualToken
           : token.shape === 'triangle' ? <path d={`M ${x} ${y - 14} L ${x + 14} ${y + 12} L ${x - 14} ${y + 12} Z`} {...common} />
             : token.shape === 'line' ? <line x1={x - 17} y1={y} x2={x + 17} y2={y} {...common} />
               : <path d={`M ${x - 18} ${y - 6} H ${x + 5} V ${y - 16} L ${x + 22} ${y} L ${x + 5} ${y + 16} V ${y + 6} H ${x - 18} Z`} {...common} />}
-  </g>)}</svg>
+  </g>)}{positionGuide && <circle className="active-anchor-ring" cx={activeAnchor.x} cy={activeAnchor.y} r="22" />}</svg>
 }
 
 function ArrowMark({ direction, cue }: { direction: number; cue: 'lime-circle' | 'violet-diamond' }) {
@@ -429,8 +454,8 @@ type ReactionAnswer = (value: AnswerValue, responseMs?: number, points?: number)
 function ReactionMatch({ exercise, onAnswer, feedback, disabled, controls }: { exercise: Exercise; onAnswer: ReactionAnswer; feedback?: 'correct' | 'incorrect' | null; disabled: boolean; controls?: { leftKey: string; rightKey: string } }) {
   if (exercise.visual?.kind !== 'reaction-match' || exercise.answer.kind !== 'choice') return null
   const { leftColor, rightColor, targetSide, shape, previewMs, responseWindowMs } = exercise.visual
-  const leftKey = controls?.leftKey || 'ArrowLeft'
-  const rightKey = controls?.rightKey || 'ArrowRight'
+  const leftKey = normalizeReactionKey(controls?.leftKey || 'ArrowLeft')
+  const rightKey = normalizeReactionKey(controls?.rightKey || 'ArrowRight')
   const [phase, setPhase] = useState<'sides' | 'target'>('sides')
   const [outcome, setOutcome] = useState<'early' | 'timeout' | 'left' | 'right' | null>(null)
   const [reactionMs, setReactionMs] = useState<number | null>(null)
@@ -490,9 +515,10 @@ function ReactionMatch({ exercise, onAnswer, feedback, disabled, controls }: { e
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (disabled || responded.current || event.repeat) return
-      if (event.key !== leftKey && event.key !== rightKey) return
+      const pressedKey = normalizeReactionKey(event.key)
+      if (pressedKey !== leftKey && pressedKey !== rightKey) return
       event.preventDefault()
-      respond(event.key === leftKey ? 'left' : 'right')
+      respond(pressedKey === leftKey ? 'left' : 'right')
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)

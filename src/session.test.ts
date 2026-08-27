@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bestCorrectRecord, buildSessionResult, migrateLegacy } from './App'
+import { bestCorrectRecord, buildSessionResult, migrateLegacy, rebindReactionKeys } from './App'
 import { generateExercise } from './exercises'
 import type { Attempt, SessionConfig } from './types'
 
@@ -51,6 +51,11 @@ describe('session data', () => {
     const exercise = generateExercise('reaction-match', 9, 101)
     const attempt: Attempt = { exercise, given: exercise.answer.kind === 'choice' ? exercise.answer.value : null, correct: true, skipped: false, responseMs: 240, points: 784 }
     expect(buildSessionResult(reactionConfig, [attempt], 30).points).toBe(784)
+  })
+
+  it('rebinds reaction controls and swaps duplicate keys', () => {
+    expect(rebindReactionKeys({ leftKey: 'ArrowLeft', rightKey: 'ArrowRight' }, 'left', 'Q')).toEqual({ leftKey: 'q', rightKey: 'ArrowRight' })
+    expect(rebindReactionKeys({ leftKey: 'q', rightKey: 'p' }, 'right', 'Q')).toEqual({ leftKey: 'p', rightKey: 'q' })
   })
 
   it('keeps correct-answer records separate by drill, difficulty and timer', () => {
