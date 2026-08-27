@@ -358,13 +358,9 @@ function Glyph({ token, size = 64, positionGuide = false }: { token: VisualToken
   const anchors: Array<{ position: NonNullable<VisualToken['position']>; x: number; y: number }> = [
     { position: 'center', x: 50, y: 50 }, { position: 'top', x: 50, y: 23 }, { position: 'right', x: 77, y: 50 }, { position: 'bottom', x: 50, y: 77 }, { position: 'left', x: 23, y: 50 },
   ]
-  const activeAnchor = anchors.find((anchor) => anchor.position === (token.position || 'center'))!
   return <svg className={`glyph ${positionGuide ? 'position-guided' : ''}`} viewBox="0 0 100 100" width={size} height={size} aria-hidden="true">{positionGuide && <g className="position-guide">
     <line x1="23" y1="50" x2="77" y2="50" /><line x1="50" y1="23" x2="50" y2="77" />
-    {anchors.map((anchor) => {
-      const active = anchor.position === (token.position || 'center')
-      return <circle key={anchor.position} className={active ? 'active' : ''} cx={anchor.x} cy={anchor.y} r={active ? 22 : 2.8} style={{ fill: active ? '#e6ff8b' : '#d5d6ce', stroke: active ? '#28594b' : '#fffef9', strokeWidth: active ? 1.8 : 1.4 }} />
-    })}
+    {anchors.filter((anchor) => anchor.position !== (token.position || 'center')).map((anchor) => <circle key={anchor.position} cx={anchor.x} cy={anchor.y} r="2.8" />)}
   </g>}{centers.slice(0, count).map(([x, y], index) => <g key={index} transform={`rotate(${token.rotation || 0} ${x} ${y})`}>
     {token.shape === 'circle' ? <circle cx={x} cy={y} r="12" {...common} />
       : token.shape === 'square' ? <rect x={x - 12} y={y - 12} width="24" height="24" rx="2" {...common} />
@@ -372,7 +368,7 @@ function Glyph({ token, size = 64, positionGuide = false }: { token: VisualToken
           : token.shape === 'triangle' ? <path d={`M ${x} ${y - 14} L ${x + 14} ${y + 12} L ${x - 14} ${y + 12} Z`} {...common} />
             : token.shape === 'line' ? <line x1={x - 17} y1={y} x2={x + 17} y2={y} {...common} />
               : <path d={`M ${x - 18} ${y - 6} H ${x + 5} V ${y - 16} L ${x + 22} ${y} L ${x + 5} ${y + 16} V ${y + 6} H ${x - 18} Z`} {...common} />}
-  </g>)}{positionGuide && <circle className="active-anchor-ring" cx={activeAnchor.x} cy={activeAnchor.y} r="22" />}</svg>
+  </g>)}</svg>
 }
 
 function ArrowMark({ direction, cue }: { direction: number; cue: 'lime-circle' | 'violet-diamond' }) {

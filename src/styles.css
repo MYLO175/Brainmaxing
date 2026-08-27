@@ -501,8 +501,6 @@ kbd { font-family: 'DM Mono'; padding: 2px 5px; border: 1px solid currentColor; 
 .visual-cell .glyph { width: 90%; height: 90%; }
 .position-guide line { stroke: #c8c9c0; stroke-width: 1.2; stroke-dasharray: 3 4; }
 .position-guide circle { fill: #d5d6ce; stroke: #fffef9; stroke-width: 1.4; }
-.position-guide circle.active { fill: #e6ff8b; stroke: var(--green); stroke-width: 1.8; }
-.active-anchor-ring { fill: none; stroke: #789d13; stroke-width: 3.2; vector-effect: non-scaling-stroke; }
 .visual-options .position-guided { width: 68px; height: 68px; }
 .visual-options button:has(.position-guided) { min-height: 92px; }
 .visual-cell small { position: absolute; left: 5px; top: 3px; color: #999a91; font-family: 'DM Mono'; font-size: 6px; }

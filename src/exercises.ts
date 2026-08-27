@@ -1819,7 +1819,7 @@ function spatial(level: number, seed: number, rng: RandomSource): Exercise {
     const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); const first = rng.pick([90, 270]); const second = rng.pick([90, 180]); answer = reflectSpatialToken(rotateSpatialToken(reflectSpatialToken(start, axis), first), axis); answer = rotateSpatialToken(answer, second); prompt = `Reflect ${reflectionInstruction(axis)}, rotate ${first}° clockwise, reflect across that same centre line again, then rotate ${second}°.`; explanation = `Track the position and symbol direction through both reflections ${reflectionInstruction(axis)} and the two rotations.`; responseTargetMs = 17500
   }
   const { options, correct } = spatialOptions(rng, answer)
-  return { id: id('spatial', seed), family: 'spatial', variant, label: 'Spatial Lab', prompt, instruction: 'Track both the symbol direction and its highlighted edge anchor.', difficulty: level, responseTargetMs, answer: { kind: 'choice', value: correct }, options, visual: { kind: 'tiles', columns: 1, cells: [shown], positionGuide: true }, explanation }
+  return { id: id('spatial', seed), family: 'spatial', variant, label: 'Spatial Lab', prompt, instruction: 'Track both the symbol direction and its off-centre position.', difficulty: level, responseTargetMs, answer: { kind: 'choice', value: correct }, options, visual: { kind: 'tiles', columns: 1, cells: [shown], positionGuide: true }, explanation }
 }
 
 function routeNeighbours(cell: number, size: number) {
