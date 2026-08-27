@@ -236,6 +236,58 @@ describe('exercise generators', () => {
     expect(angleQuestions.every((exercise) => exercise.visual?.kind === 'spatial-angle' && [135, 180, 225, 270].includes(Number(`${exercise.answer.value}`.replace('°', ''))))).toBe(true)
   })
 
+  it('reflects arrows and triangles using their own base direction while moving only across the chosen axis', () => {
+    const reflections = Array.from({ length: 5000 }, (_, seed) => generateExercise('spatial', 4, seed + 1))
+      .filter((exercise) => exercise.variant === 'reflection' && exercise.visual?.kind === 'tiles')
+    expect(reflections.length).toBeGreaterThan(500)
+
+    for (const exercise of reflections) {
+      if (exercise.visual?.kind !== 'tiles' || exercise.answer.kind !== 'choice') continue
+      const shown = exercise.visual.cells[0]
+      const correct = exercise.options?.find((option) => option.id === exercise.answer.value)?.visual
+      expect(correct).toBeDefined()
+      if (!correct) continue
+      const horizontal = exercise.prompt.includes('horizontal')
+      const expectedPosition = horizontal
+        ? shown.position === 'top' ? 'bottom' : shown.position === 'bottom' ? 'top' : shown.position
+        : shown.position === 'left' ? 'right' : shown.position === 'right' ? 'left' : shown.position
+      const rotation = shown.rotation || 0
+      const expectedRotation = shown.shape === 'triangle'
+        ? ((horizontal ? 180 - rotation : -rotation) + 360) % 360
+        : ((horizontal ? -rotation : 180 - rotation) + 360) % 360
+      expect(correct.position).toBe(expectedPosition)
+      expect(correct.rotation).toBe(expectedRotation)
+    }
+  })
+
+  it('offers the correct answer for a right-facing triangle reflected top-to-bottom then rotated clockwise', () => {
+    const exercise = Array.from({ length: 10000 }, (_, seed) => generateExercise('spatial', 9, seed + 1))
+      .find((candidate) => candidate.variant === 'reflect-then-rotate'
+        && candidate.prompt.includes('horizontal centre line')
+        && candidate.prompt.includes('90° clockwise')
+        && candidate.visual?.kind === 'tiles'
+        && candidate.visual.cells[0].shape === 'triangle'
+        && candidate.visual.cells[0].rotation === 90
+        && candidate.visual.cells[0].position === 'left')
+
+    expect(exercise).toBeDefined()
+    expect(exercise?.answer.kind).toBe('choice')
+    if (!exercise || exercise.answer.kind !== 'choice') return
+    const correct = exercise.options?.find((option) => option.id === exercise.answer.value)?.visual
+    expect(correct).toMatchObject({ shape: 'triangle', position: 'top', rotation: 180 })
+  })
+
+  it('describes every Spatial Lab reflection by its centre line and positional effect', () => {
+    const exercises = [4, 7, 9].flatMap((level) => Array.from({ length: 1800 }, (_, seed) => generateExercise('spatial', level, seed + 1)))
+      .filter((exercise) => exercise.variant?.includes('reflect') || exercise.variant === 'reflection' || exercise.variant === 'three-step-transform')
+    expect(exercises.length).toBeGreaterThan(500)
+    expect(exercises.every((exercise) => !exercise.prompt.includes('Reflect horizontal') && !exercise.prompt.includes('Reflect vertical'))).toBe(true)
+    for (const exercise of exercises) {
+      if (exercise.prompt.includes('horizontal')) expect(`${exercise.prompt} ${exercise.explanation}`).toContain('top ↔ bottom')
+      if (exercise.prompt.includes('vertical')) expect(`${exercise.prompt} ${exercise.explanation}`).toContain('left ↔ right')
+    }
+  })
+
   it('uses real net and face-folding question structures at upper Spatial Lab levels', () => {
     const expert = Array.from({ length: 1600 }, (_, seed) => generateExercise('spatial', 9, seed + 1))
     const variants = new Set(expert.map((exercise) => exercise.variant))

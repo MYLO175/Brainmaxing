@@ -339,7 +339,7 @@ function Glyph({ token, size = 64, positionGuide = false }: { token: VisualToken
   ]
   return <svg className={`glyph ${positionGuide ? 'position-guided' : ''}`} viewBox="0 0 100 100" width={size} height={size} aria-hidden="true">{positionGuide && <g className="position-guide">
     <line x1="23" y1="50" x2="77" y2="50" /><line x1="50" y1="23" x2="50" y2="77" />
-    {anchors.map((anchor) => <circle key={anchor.position} className={anchor.position === (token.position || 'center') ? 'active' : ''} cx={anchor.x} cy={anchor.y} r={anchor.position === (token.position || 'center') ? 4.8 : 2.8} />)}
+    {anchors.filter((anchor) => anchor.position !== (token.position || 'center')).map((anchor) => <circle key={anchor.position} cx={anchor.x} cy={anchor.y} r="2.8" />)}
   </g>}{centers.slice(0, count).map(([x, y], index) => <g key={index} transform={`rotate(${token.rotation || 0} ${x} ${y})`}>
     {token.shape === 'circle' ? <circle cx={x} cy={y} r="12" {...common} />
       : token.shape === 'square' ? <rect x={x - 12} y={y - 12} width="24" height="24" rx="2" {...common} />

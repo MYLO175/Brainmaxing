@@ -1614,7 +1614,10 @@ function reflectSpatialToken(value: VisualToken, axis: 'vertical' | 'horizontal'
   const reflectedPosition: SpatialPosition = axis === 'vertical'
     ? position === 'left' ? 'right' : position === 'right' ? 'left' : position
     : position === 'top' ? 'bottom' : position === 'bottom' ? 'top' : position
-  return { ...value, position: reflectedPosition, rotation: axis === 'vertical' ? normalRotation(180 - rotation) : normalRotation(-rotation) }
+  const baseDirection = value.shape === 'triangle' ? -90 : 0
+  const absoluteDirection = normalRotation(rotation + baseDirection)
+  const reflectedDirection = axis === 'vertical' ? 180 - absoluteDirection : -absoluteDirection
+  return { ...value, position: reflectedPosition, rotation: normalRotation(reflectedDirection - baseDirection) }
 }
 
 function spatialOptions(rng: RandomSource, answer: VisualToken) {
@@ -1768,6 +1771,12 @@ function angleCompositionExercise(level: number, seed: number, rng: RandomSource
   }
 }
 
+function reflectionInstruction(axis: 'vertical' | 'horizontal') {
+  return axis === 'horizontal'
+    ? 'across the horizontal centre line (top ↔ bottom)'
+    : 'across the vertical centre line (left ↔ right)'
+}
+
 function spatial(level: number, seed: number, rng: RandomSource): Exercise {
   const band = levelBand(level)
   const available = level === 1
@@ -1796,18 +1805,18 @@ function spatial(level: number, seed: number, rng: RandomSource): Exercise {
   } else if (variant === 'positioned-rotation') {
     const degrees = rng.pick([90, 180, 270]); answer = rotateSpatialToken(start, degrees); prompt = `Rotate the entire tile ${degrees}° clockwise.`; explanation = `The arrow and its off-centre position both rotate ${degrees}°.`; responseTargetMs = 10000
   } else if (variant === 'reflection') {
-    const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); answer = reflectSpatialToken(start, axis); prompt = `Reflect the entire tile across its ${axis} axis.`; explanation = `A ${axis} reflection flips both the arrow direction and its position.`; responseTargetMs = 10500
+    const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); answer = reflectSpatialToken(start, axis); prompt = `Reflect the entire tile ${reflectionInstruction(axis)}.`; explanation = axis === 'horizontal' ? 'A horizontal-centre-line reflection flips the symbol vertically and swaps top with bottom; left and right positions stay fixed.' : 'A vertical-centre-line reflection flips the symbol sideways and swaps left with right; top and bottom positions stay fixed.'; responseTargetMs = 10500
   } else if (variant === 'reflect-then-rotate') {
-    const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); const degrees = rng.pick([90, 270]); answer = rotateSpatialToken(reflectSpatialToken(start, axis), degrees); prompt = `Reflect across the ${axis} axis, then rotate ${degrees}° clockwise.`; explanation = `Apply the reflection first, then rotate the reflected result ${degrees}°.`; responseTargetMs = band === 3 ? 14500 : 12500
+    const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); const degrees = rng.pick([90, 270]); answer = rotateSpatialToken(reflectSpatialToken(start, axis), degrees); prompt = `Reflect ${reflectionInstruction(axis)}, then rotate ${degrees}° clockwise.`; explanation = `First reflect ${reflectionInstruction(axis)}, then rotate that result ${degrees}° clockwise.`; responseTargetMs = band === 3 ? 14500 : 12500
   } else if (variant === 'rotate-then-reflect') {
-    const degrees = rng.pick([90, 270]); const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); answer = reflectSpatialToken(rotateSpatialToken(start, degrees), axis); prompt = `Rotate ${degrees}° clockwise, then reflect across the ${axis} axis.`; explanation = `Order matters: rotate first, then reflect that result.`; responseTargetMs = band === 3 ? 14500 : 12500
+    const degrees = rng.pick([90, 270]); const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); answer = reflectSpatialToken(rotateSpatialToken(start, degrees), axis); prompt = `Rotate ${degrees}° clockwise, then reflect ${reflectionInstruction(axis)}.`; explanation = `Order matters: rotate first, then reflect that result ${reflectionInstruction(axis)}.`; responseTargetMs = band === 3 ? 14500 : 12500
   } else if (variant === 'inverse-transform') {
     const degrees = rng.pick([90, 180, 270]); shown = rotateSpatialToken(start, degrees); answer = start; prompt = `The shown tile is the result of a ${degrees}° clockwise rotation. Which tile was the original?`; explanation = `Undo the change with a ${normalRotation(360 - degrees)}° clockwise rotation.`; responseTargetMs = band === 3 ? 15000 : 13000
   } else {
-    const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); const first = rng.pick([90, 270]); const second = rng.pick([90, 180]); answer = reflectSpatialToken(rotateSpatialToken(reflectSpatialToken(start, axis), first), axis); answer = rotateSpatialToken(answer, second); prompt = `Reflect ${axis}, rotate ${first}° clockwise, reflect ${axis} again, then rotate ${second}°.`; explanation = 'Track the position and arrow direction after each of the four transformations.'; responseTargetMs = 17500
+    const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); const first = rng.pick([90, 270]); const second = rng.pick([90, 180]); answer = reflectSpatialToken(rotateSpatialToken(reflectSpatialToken(start, axis), first), axis); answer = rotateSpatialToken(answer, second); prompt = `Reflect ${reflectionInstruction(axis)}, rotate ${first}° clockwise, reflect across that same centre line again, then rotate ${second}°.`; explanation = `Track the position and symbol direction through both reflections ${reflectionInstruction(axis)} and the two rotations.`; responseTargetMs = 17500
   }
   const { options, correct } = spatialOptions(rng, answer)
-  return { id: id('spatial', seed), family: 'spatial', variant, label: 'Spatial Lab', prompt, instruction: 'Track both the symbol direction and its highlighted edge anchor.', difficulty: level, responseTargetMs, answer: { kind: 'choice', value: correct }, options, visual: { kind: 'tiles', columns: 1, cells: [shown], positionGuide: true }, explanation }
+  return { id: id('spatial', seed), family: 'spatial', variant, label: 'Spatial Lab', prompt, instruction: 'Track both the symbol direction and its off-centre position.', difficulty: level, responseTargetMs, answer: { kind: 'choice', value: correct }, options, visual: { kind: 'tiles', columns: 1, cells: [shown], positionGuide: true }, explanation }
 }
 
 function routeNeighbours(cell: number, size: number) {
