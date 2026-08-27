@@ -39,8 +39,21 @@ To keep it in the Dock, open Brainmax, right-click its Dock icon, then choose **
 npm run build
 ```
 
-To rebuild the native macOS app:
+To build, replace the single installed macOS app, and reopen it:
 
 ```bash
 npm run mac
 ```
+
+This safely updates `/Applications/Brainmax.app`. Its rollback copy exists only
+in `/private/tmp` while installation is in progress, so updates do not leave
+dated app bundles in Applications.
+
+To build the app without installing or opening it:
+
+```bash
+npm run mac:build
+```
+
+The build-only app is written to
+`/private/tmp/brainmax-native-build/Brainmax.app`.

@@ -10,7 +10,8 @@
     "ios:sync": "npm run build && node scripts/make-native-html.mjs dist ios/Brainmax/Web/index.html",
     "ios:build": "npm run ios:sync && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project ios/Brainmax.xcodeproj -scheme Brainmax -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath /private/tmp/brainmax-ios-derived-data CODE_SIGNING_ALLOWED=NO build",
     "test": "vitest run",
-    "mac": "./scripts/build-macos-app.sh",
+    "mac": "./scripts/install-macos-app.sh",
+    "mac:build": "./scripts/build-macos-app.sh",
     "preview": "vite preview"
   },
   "dependencies": {
