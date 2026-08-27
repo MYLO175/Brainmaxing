@@ -137,4 +137,8 @@ Brainmax is a personal project under active development. Its assessment mode is 
 
 ## License
 
-This project does not currently include an open-source license. All rights are reserved.
+Copyright © 2026 Mylo. All rights reserved.
+
+The source code is publicly viewable for demonstration purposes only.
+No permission is granted to copy, modify, distribute, or use it without
+explicit written permission.
