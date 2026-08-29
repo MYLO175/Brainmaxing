@@ -494,8 +494,8 @@ kbd { font-family: 'DM Mono'; padding: 2px 5px; border: 1px solid currentColor; 
 .tile-index-options button { min-width: 0; padding: 10px 5px; font-size: 13px; }
 .feedback-copy.explanation { height: 45px; max-width: 650px; margin: 13px auto 0; line-height: 1.5; }
 
-.visual-grid { margin: 0 auto 8px; display: grid; gap: 5px; width: 228px; padding: 7px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.46); }
-.visual-grid.tiles { width: 252px; }
+.visual-grid { margin: 0 auto 8px; display: grid; gap: 5px; width: 270px; padding: 7px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.46); }
+.visual-grid.tiles { width: 290px; }
 .visual-grid.tiles.position-guide-grid { width: 270px; padding: 9px; }
 .visual-cell { aspect-ratio: 1; min-width: 0; position: relative; border: 1px solid #d7d4c9; border-radius: 7px; background: #fffef9; display: grid; place-items: center; color: #292b25; overflow: hidden; }
 .visual-cell .glyph { width: 90%; height: 90%; }
@@ -685,6 +685,29 @@ kbd { font-family: 'DM Mono'; padding: 2px 5px; border: 1px solid currentColor; 
 .reaction-help { min-height: 38px; max-width: 560px; margin: 9px 0 0; color: #6a6c64; font-size: 11px; font-weight: 600; line-height: 1.45; }
 .reaction-static { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 0 auto 12px; }
 .reaction-static .reaction-object { width: 64px; }
+.focus-reaction-stage { display: grid; justify-items: center; }
+.focus-reaction-stage h1 { margin: 8px auto 10px; font-size: clamp(28px, 3.2vw, 43px); letter-spacing: -1.8px; }
+.focus-reaction-arena { width: min(900px, 96vw); height: 300px; position: relative; left: 50%; transform: translateX(-50%); overflow: hidden; border: 1px solid var(--line); border-radius: 22px; background: radial-gradient(circle at 50% 50%, rgba(49,184,232,.1), transparent 28%), rgba(255,255,255,.34); box-shadow: inset 0 1px rgba(255,255,255,.5); touch-action: manipulation; user-select: none; }
+.focus-tap-zone { width: 50%; height: 100%; position: absolute; top: 0; z-index: 1; border: 0; background: transparent; color: #73756d; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.focus-tap-zone.left { left: 0; }
+.focus-tap-zone.right { right: 0; }
+.focus-tap-zone:not(:disabled):hover { background: rgba(255,255,255,.2); }
+.focus-tap-zone:disabled { cursor: default; }
+.focus-tap-zone > span { position: absolute; bottom: 19px; display: flex; align-items: center; gap: 7px; font: 750 9px 'Manrope'; letter-spacing: .7px; text-transform: uppercase; }
+.focus-tap-zone.left > span { left: 24px; }
+.focus-tap-zone.right > span { right: 24px; flex-direction: row-reverse; }
+.focus-tap-zone kbd { min-width: 26px; border-color: #a9aaa1; background: rgba(255,255,255,.62); font-size: 9px; }
+.focus-arrow-row { width: min(650px, 76vw); position: absolute; left: 50%; z-index: 3; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; gap: 8px; opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(.96); transition: opacity .025s linear, transform .045s ease-out; }
+.focus-reaction-arena.position-above .focus-arrow-row { top: 31%; }
+.focus-reaction-arena.position-below .focus-arrow-row { top: 69%; }
+.focus-arrow-row.visible { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.focus-arrow { width: 100%; overflow: visible; filter: drop-shadow(0 7px 8px rgba(20,116,150,.16)); }
+.focus-arrow.direction-left { transform: rotate(180deg); }
+.focus-arrow path:first-child { fill: #31b8e8; }
+.focus-arrow-inset { fill: #f5f2e9; }
+.focus-reaction-stage.correct .focus-arrow-row .focus-arrow:nth-child(3) path:first-child { fill: #91b82a; }
+.focus-reaction-stage.incorrect .focus-arrow-row .focus-arrow:nth-child(3) path:first-child { fill: #c7503a; }
+.focus-static { width: min(420px, 74vw); min-height: 100px; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; gap: 5px; margin: 0 auto 12px; padding: 13px 18px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.38); }
 .route-grid span.blocked { background: repeating-linear-gradient(45deg, #272922 0, #272922 4px, #4c4e46 4px, #4c4e46 8px); border-color: #272922; }
 .route-grid span.start { background: var(--lime); border-color: #a7bd56; }
 .route-grid span.goal { background: var(--peach); border-color: #cf8c57; }
@@ -787,6 +810,11 @@ kbd { font-family: 'DM Mono'; padding: 2px 5px; border: 1px solid currentColor; 
   .reaction-object { width: 78px; }
   .reaction-target .reaction-object { width: 96px; }
   .reaction-help { max-width: 88vw; font-size: 10px; }
+  .focus-reaction-stage h1 { margin-bottom: 3px; }
+  .focus-reaction-arena { width: 100vw; height: min(310px, 43vh); border-left: 0; border-right: 0; border-radius: 0; }
+  .focus-arrow-row { width: min(560px, 91vw); gap: 3px; }
+  .focus-tap-zone.left > span { left: 14px; }
+  .focus-tap-zone.right > span { right: 14px; }
 }
 
 @media (max-height: 700px) and (min-width: 781px) {
@@ -845,6 +873,9 @@ kbd { font-family: 'DM Mono'; padding: 2px 5px; border: 1px solid currentColor; 
   .reaction-target .reaction-object { width: 92px; }
   .reaction-side { gap: 13px; }
   .reaction-help { margin-top: 5px; min-height: 28px; }
+  .focus-reaction-stage h1 { margin: 3px auto; font-size: 28px; }
+  .focus-reaction-arena { height: 220px; }
+  .focus-arrow-row { width: min(520px, 72vw); }
   .visual-grid { width: 205px; margin-bottom: 5px; }
   .visual-grid.tiles { width: 220px; }
   .feedback-copy.explanation { height: 30px; margin-top: 7px; }

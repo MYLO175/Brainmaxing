@@ -72,6 +72,11 @@ function rounded(value: number, digits = 2) {
   return Number(value.toFixed(digits))
 }
 
+function decimalPlaces(value: number) {
+  if (Number.isInteger(value)) return 0
+  return `${value}`.split('.')[1]?.length || 0
+}
+
 function gcd(a: number, b: number): number {
   return b ? gcd(b, a % b) : Math.abs(a)
 }
@@ -105,6 +110,7 @@ function arithmetic(level: number, seed: number, rng: RandomSource): Exercise {
     let a = rng.int(band === 0 ? 8 : 40, 30 + level * (band === 0 ? 12 : 45))
     let b = rng.int(3, 15 + level * 16)
     if (variant === 'subtraction' && b > a) [a, b] = [b, a]
+    if (variant === 'subtraction' && band === 0 && a - b < 6 + level * 2) a = b + 6 + level * 2 + rng.int(0, 8)
     const answer = variant === 'addition' ? a + b : a - b
     const operator = variant === 'addition' ? '+' : '−'
     return { id: id('arithmetic', seed), family: 'arithmetic', variant, label: 'Arithmetic', prompt: `${a} ${operator} ${b}`, difficulty: level, responseTargetMs: band === 0 ? 4200 : 5200, answer: { kind: 'number', value: answer }, explanation: `${a} ${operator} ${b} = ${answer}.` }
@@ -116,18 +122,18 @@ function arithmetic(level: number, seed: number, rng: RandomSource): Exercise {
     return { id: id('arithmetic', seed), family: 'arithmetic', variant, label: 'Multiplication', prompt: `${a} × ${b}`, difficulty: level, responseTargetMs: band < 2 ? 4800 : 6500, answer: { kind: 'number', value: answer }, explanation: `${a} × ${b} = ${answer}.` }
   }
   if (variant === 'division') {
-    const divisor = rng.int(band < 2 ? 2 : 6, band < 2 ? 12 : 24)
-    const answer = rng.int(band < 2 ? 3 : 12, band < 2 ? 12 + level : 30 + level * 6)
+    const divisor = rng.int(band < 2 ? 4 : 6, band < 2 ? 12 : 24)
+    const answer = rng.int(band < 2 ? 6 : 12, band < 2 ? 12 + level : 30 + level * 6)
     const dividend = divisor * answer
     return { id: id('arithmetic', seed), family: 'arithmetic', variant, label: 'Division', prompt: `${dividend} ÷ ${divisor}`, difficulty: level, responseTargetMs: band < 2 ? 5000 : 6800, answer: { kind: 'number', value: answer }, explanation: `${divisor} × ${answer} = ${dividend}, so ${dividend} ÷ ${divisor} = ${answer}.` }
   }
   if (variant === 'decimal-arithmetic') {
     const operation = band >= 2 ? rng.pick(['+', '−', '×']) : rng.pick(['+', '−'])
-    let a = band >= 3 ? rng.int(350, 2400) / 100 : rng.int(15, 80 + level * 10) / 10
-    let b = band >= 3 ? (operation === '×' ? rng.int(2, 15) : rng.int(125, 950) / 100) : rng.int(5, 45 + level * 5) / 10
+    let a = band >= 2 ? rng.int(350, 2400) / 100 : rng.int(25, 80 + level * 10) / 10
+    let b = band >= 2 ? (operation === '×' ? rng.int(3, 15) : rng.int(125, 950) / 100) : rng.int(12, 45 + level * 5) / 10
     if (operation === '−' && b > a) [a, b] = [b, a]
     let answer = operation === '+' ? a + b : operation === '−' ? a - b : a * b
-    answer = rounded(answer, 3)
+    answer = rounded(answer, 2)
     return { id: id('arithmetic', seed), family: 'arithmetic', variant, label: 'Decimal arithmetic', prompt: `${a} ${operation} ${b}`, difficulty: level, responseTargetMs: band >= 3 ? 8000 : 6500, answer: { kind: 'number', value: answer }, explanation: `${a} ${operation} ${b} = ${answer}.` }
   }
   if (variant === 'mixed-operations') {
@@ -266,7 +272,7 @@ function fractions(level: number, seed: number, rng: RandomSource): Exercise {
   if (variant === 'percent-to-fraction') {
     const exactDenominator = rng.pick([2, 4, 5, 8, 10, 20, 25])
     const exactNumerator = rng.int(1, exactDenominator - 1)
-    const exactPercent = exactNumerator / exactDenominator * 100
+    const exactPercent = rounded(exactNumerator / exactDenominator * 100, 4)
     const simplified = fractionLabel(exactNumerator, exactDenominator)
     const [simpleNumerator, simpleDenominator] = simplified.split('/').map(Number)
     const options = choiceOptions(rng, simplified, [
@@ -318,10 +324,17 @@ function fractions(level: number, seed: number, rng: RandomSource): Exercise {
     const context = rng.pick(['tasks', 'tickets', 'data records', 'battery charge units'])
     return { id: id('fractions', seed), family: 'fractions', variant, label: 'Fraction remaining', prompt: `Start with ${total} ${context}. Use ${firstNumerator}/${firstDenominator}, then use ${secondNumerator}/${secondDenominator} of what remains.`, instruction: `How many ${context} remain?`, difficulty: level, responseTargetMs: 10500, answer: { kind: 'number', value: answer }, explanation: `After the first use, ${total} × ${firstDenominator - firstNumerator}/${firstDenominator} = ${afterFirst}. Then ${afterFirst} × ${secondDenominator - secondNumerator}/${secondDenominator} = ${answer} remain.` }
   }
-  const wholeA = rng.int(1, 4); const wholeB = rng.int(1, 4); const denominatorA = rng.pick([2, 3, 4, 5]); const denominatorB = rng.pick([2, 3, 4, 5])
-  const numeratorA = rng.int(1, denominatorA - 1); const numeratorB = rng.int(1, denominatorB - 1)
-  const resultNumerator = (wholeA * denominatorA + numeratorA) * denominatorB + (wholeB * denominatorB + numeratorB) * denominatorA
-  const resultDenominator = denominatorA * denominatorB
+  const wholeA = rng.int(1, 4); const wholeB = rng.int(1, 4)
+  let denominatorA = 3; let denominatorB = 4; let numeratorA = 1; let numeratorB = 1; let resultNumerator = 0; let resultDenominator = 1
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    denominatorA = rng.pick([2, 3, 4, 5]); denominatorB = rng.pick([2, 3, 4, 5])
+    const validNumeratorsA = Array.from({ length: denominatorA - 1 }, (_, index) => index + 1).filter((value) => gcd(value, denominatorA) === 1)
+    const validNumeratorsB = Array.from({ length: denominatorB - 1 }, (_, index) => index + 1).filter((value) => gcd(value, denominatorB) === 1)
+    numeratorA = rng.pick(validNumeratorsA); numeratorB = rng.pick(validNumeratorsB)
+    resultNumerator = (wholeA * denominatorA + numeratorA) * denominatorB + (wholeB * denominatorB + numeratorB) * denominatorA
+    resultDenominator = denominatorA * denominatorB
+    if (resultNumerator % resultDenominator !== 0) break
+  }
   const answer = fractionLabel(resultNumerator, resultDenominator)
   const distractors = [
     fractionLabel(resultNumerator - denominatorA, resultDenominator),
@@ -333,8 +346,16 @@ function fractions(level: number, seed: number, rng: RandomSource): Exercise {
 
 function ratios(level: number, seed: number, rng: RandomSource): Exercise {
   const band = levelBand(level)
-  const left = rng.int(2, 5 + Math.floor(level / 2))
-  const right = rng.int(2, 6 + Math.floor(level / 2))
+  let left = rng.int(2, 5 + Math.floor(level / 2))
+  let right = rng.int(2, 6 + Math.floor(level / 2))
+  for (let attempt = 0; attempt < 12 && (left === right || gcd(left, right) > 1); attempt += 1) {
+    left = rng.int(2, 5 + Math.floor(level / 2))
+    right = rng.int(2, 6 + Math.floor(level / 2))
+  }
+  if (left === right || gcd(left, right) > 1) {
+    right = Array.from({ length: 5 + Math.floor(level / 2) }, (_, index) => index + 2)
+      .find((candidate) => candidate !== left && gcd(left, candidate) === 1) || right
+  }
   const scale = rng.int(3, 5 + level)
   const available = band === 0
     ? ['equivalent', 'share-total']
@@ -430,15 +451,26 @@ function averages(level: number, seed: number, rng: RandomSource): Exercise {
   }
   if (variant === 'updated-mean') {
     const count = rng.int(3, 8)
-    const newValue = rng.int(5, 30 + level * 3)
-    const answer = rounded((target * count + newValue) / (count + 1))
+    const answer = target + rng.int(1, band >= 2 ? 4 : 2)
+    const newValue = answer * (count + 1) - target * count
     const noun = rng.pick(['results', 'sprints', 'tests', 'response times'])
     return { id: id('averages', seed), family: 'averages', variant, label: 'Updated average', prompt: `${count} ${noun} average ${target}; next is ${newValue}`, instruction: 'What is the new average?', difficulty: level, responseTargetMs: 8200, answer: { kind: 'number', value: answer, tolerance: .001 }, explanation: `Old total ${target} × ${count} = ${target * count}. Add ${newValue}, then divide ${target * count + newValue} by ${count + 1} to get ${answer}.` }
   }
   if (variant === 'weighted-mean') {
-    const countA = rng.int(2, band >= 3 ? 12 : 6); const countB = rng.int(2, band >= 3 ? 12 : 6)
-    const averageA = target; const averageB = target + rng.int(3, 9)
-    const answer = rounded((countA * averageA + countB * averageB) / (countA + countB))
+    let countA = 2; let countB = 2; let averageB = target + 4; let answer = target + 2
+    let foundCleanAverage = false
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      countA = rng.int(2, band >= 3 ? 12 : 6)
+      countB = rng.int(2, band >= 3 ? 12 : 6)
+      averageB = target + rng.int(3, 10)
+      answer = rounded((countA * target + countB * averageB) / (countA + countB), 1)
+      if (decimalPlaces(answer) <= 1 && Math.abs(answer * (countA + countB) - (countA * target + countB * averageB)) < .0001) {
+        foundCleanAverage = true
+        break
+      }
+    }
+    if (!foundCleanAverage) { countA = 4; countB = 4; averageB = target + 8; answer = target + 4 }
+    const averageA = target
     return { id: id('averages', seed), family: 'averages', variant, label: 'Weighted average', prompt: `${countA} tests average ${averageA}; ${countB} tests average ${averageB}`, instruction: 'What is the combined average?', difficulty: level, responseTargetMs: band >= 3 ? 10500 : 9000, answer: { kind: 'number', value: answer, tolerance: .001 }, explanation: `Combined total: ${countA} × ${averageA} + ${countB} × ${averageB} = ${countA * averageA + countB * averageB}. Divide by ${countA + countB} to get ${answer}.` }
   }
   if (variant === 'target-average') {
@@ -451,8 +483,17 @@ function averages(level: number, seed: number, rng: RandomSource): Exercise {
     const originalAverage = remainingAverage + difference; const removed = remainingAverage + count * difference
     return { id: id('averages', seed), family: 'averages', variant, label: 'Removed value', prompt: `${count} results average ${originalAverage}. After one result is removed, the remaining ${count - 1} average ${remainingAverage}.`, instruction: 'What result was removed?', difficulty: level, responseTargetMs: 10500, answer: { kind: 'number', value: removed }, explanation: `Original total: ${count} × ${originalAverage} = ${count * originalAverage}. Remaining total: ${count - 1} × ${remainingAverage} = ${(count - 1) * remainingAverage}. The difference is ${removed}.` }
   }
-  const countA = rng.int(4, 12); const countB = rng.int(4, 12); const averageA = rng.int(15, 35); const averageB = averageA + rng.int(4, 12)
-  const combined = rounded((countA * averageA + countB * averageB) / (countA + countB))
+  let countA = 4; let countB = 4; let averageA = 20; let averageB = 28; let combined = 24
+  let foundCleanAverage = false
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    countA = rng.int(4, 12); countB = rng.int(4, 12); averageA = rng.int(15, 35); averageB = averageA + rng.int(4, 12)
+    combined = rounded((countA * averageA + countB * averageB) / (countA + countB), 1)
+    if (decimalPlaces(combined) <= 1 && Math.abs(combined * (countA + countB) - (countA * averageA + countB * averageB)) < .0001) {
+      foundCleanAverage = true
+      break
+    }
+  }
+  if (!foundCleanAverage) { countA = 4; countB = 4; averageA = 20; averageB = 28; combined = 24 }
   return { id: id('averages', seed), family: 'averages', variant: 'combined-group-average', label: 'Combined groups', prompt: `Team A: ${countA} people averaging ${averageA}. Team B: ${countB} people averaging ${averageB}.`, instruction: 'What is the overall average?', difficulty: level, responseTargetMs: 11000, answer: { kind: 'number', value: combined, tolerance: .001 }, explanation: `Use group totals, not the mean of the two averages: (${countA} × ${averageA} + ${countB} × ${averageB}) ÷ ${countA + countB} = ${combined}.` }
 }
 
@@ -601,11 +642,11 @@ function powers(level: number, seed: number, rng: RandomSource): Exercise {
         : ['powers-of-ten', 'divisibility', 'exponent-product', 'exponent-quotient', 'scientific-multiplication', 'combined-root-power', 'last-digit-power']
   const variant = rng.pick(available)
   if (variant === 'square' || variant === 'cube') {
-    const exponent = variant === 'square' ? 2 : 3; const base = rng.int(2, variant === 'cube' ? 12 : Math.min(20, 7 + level * 2)); const answer = base ** exponent
+    const exponent = variant === 'square' ? 2 : 3; const base = rng.int(level === 1 ? 3 : 5, variant === 'cube' ? 12 : Math.min(20, 7 + level * 2)); const answer = base ** exponent
     return { id: id('powers', seed), family: 'powers', variant, label: variant === 'square' ? 'Squares' : 'Cubes', prompt: `${base}${exponent === 2 ? '²' : '³'}`, difficulty: level, responseTargetMs: band === 0 ? 4200 : 5200, answer: { kind: 'number', value: answer }, explanation: `${base} multiplied by itself ${exponent} times is ${answer}.` }
   }
   if (variant === 'square-root' || variant === 'cube-root') {
-    const cube = variant === 'cube-root'; const root = rng.int(3, cube ? 12 : Math.min(22, 8 + level * 2)); const value = cube ? root ** 3 : root ** 2
+    const cube = variant === 'cube-root'; const root = rng.int(level === 1 ? 3 : 5, cube ? 12 : Math.min(22, 8 + level * 2)); const value = cube ? root ** 3 : root ** 2
     return { id: id('powers', seed), family: 'powers', variant, label: cube ? 'Cube roots' : 'Square roots', prompt: `${cube ? '∛' : '√'}${value}`, difficulty: level, responseTargetMs: band === 0 ? 4400 : 5400, answer: { kind: 'number', value: root }, explanation: `${root}${cube ? '³' : '²'} = ${value}, so the root is ${root}.` }
   }
   if (variant === 'powers-of-ten') {
@@ -789,23 +830,28 @@ function token(shape: VisualToken['shape'], rotation: number, count: number, fil
   return { shape, rotation: ((rotation % 360) + 360) % 360, count, filled, position: 'center' }
 }
 
-function visualTokenKey(value: VisualToken) {
-  return `${value.shape}:${value.rotation ?? 0}:${value.count ?? 1}:${value.filled ? 1 : 0}:${value.position ?? 'center'}`
+export function visualTokenAppearanceKey(value: VisualToken) {
+  const rotationPeriod = value.shape === 'circle' ? 1 : value.shape === 'square' || value.shape === 'diamond' ? 90 : value.shape === 'line' ? 180 : 360
+  const rotation = rotationPeriod === 1 ? 0 : (((value.rotation ?? 0) % rotationPeriod) + rotationPeriod) % rotationPeriod
+  return `${value.shape}:${rotation}:${value.count ?? 1}:${value.filled ? 1 : 0}:${value.position ?? 'center'}`
 }
 
 function visualChoices(rng: RandomSource, answer: VisualToken, distractors: VisualToken[], prefix: string) {
   const unique = new Map<string, VisualToken>()
-  ;[answer, ...distractors].forEach((value) => unique.set(visualTokenKey(value), value))
+  ;[answer, ...distractors].forEach((value) => {
+    const key = visualTokenAppearanceKey(value)
+    if (!unique.has(key)) unique.set(key, value)
+  })
   const fallbackShapes: VisualToken['shape'][] = ['arrow', 'triangle', 'diamond', 'square', 'circle']
   let fallback = 0
   while (unique.size < 4) {
     const value = token(fallbackShapes[fallback % fallbackShapes.length], (answer.rotation ?? 0) + 45 * (fallback + 1), ((answer.count ?? 1) + fallback) % 3 + 1, fallback % 2 === 0 ? !answer.filled : !!answer.filled)
-    unique.set(visualTokenKey(value), value)
+    unique.set(visualTokenAppearanceKey(value), value)
     fallback += 1
   }
   const values = rng.shuffle([...unique.values()].slice(0, 4))
   const options = values.map((visual, index) => ({ id: `${prefix}${index}`, label: `Option ${index + 1}`, visual }))
-  return { options, answerId: options.find((option) => visualTokenKey(option.visual!) === visualTokenKey(answer))!.id }
+  return { options, answerId: options.find((option) => visualTokenAppearanceKey(option.visual!) === visualTokenAppearanceKey(answer))!.id }
 }
 
 function matrix(level: number, seed: number, rng: RandomSource): Exercise {
@@ -818,11 +864,11 @@ function matrix(level: number, seed: number, rng: RandomSource): Exercise {
         ? level >= 7 ? ['count-cycle', 'shape-cycle', 'row-rotation', 'dual-axis', 'attribute-latin', 'row-composition'] : ['fill-2x2', 'count-cycle', 'shape-cycle', 'row-rotation', 'dual-axis']
         : ['dual-axis', 'attribute-latin', 'row-composition', 'column-composition', 'combined-transform']
   const variant = rng.pick(available)
-  const shape = rng.pick<VisualToken['shape']>(['triangle', 'arrow', 'diamond'])
+  const shape = rng.pick<VisualToken['shape']>(['triangle', 'arrow'])
   let columns = variant.endsWith('2x2') ? 2 : 3
   let cells: VisualToken[] = []
   let explanation = ''
-  let instruction = 'Choose the tile that completes every row and column.'
+  let instruction = 'Use the repeated evidence across both rows and columns. Every visible attribute is intentional.'
 
   if (variant === 'rotation-2x2') {
     const start = rng.pick([0, 45, 90, 180]); const across = rng.pick([90, 180]); const down = rng.pick([45, 90])
@@ -838,8 +884,8 @@ function matrix(level: number, seed: number, rng: RandomSource): Exercise {
     explanation = 'Counts cycle 1 → 2 → 3 across each row, shifted one place in the next row. Fill stays consistent within each row.'
   } else if (variant === 'shape-cycle') {
     const shapes = rng.shuffle<VisualToken['shape']>(['circle', 'square', 'diamond'])
-    cells = Array.from({ length: 9 }, (_, index) => { const row = Math.floor(index / 3); const column = index % 3; return token(shapes[(row + column) % 3], column * 45, 1, row === column) })
-    explanation = 'The three shapes shift one position left on each row; diagonal cells are filled.'
+    cells = Array.from({ length: 9 }, (_, index) => { const row = Math.floor(index / 3); const column = index % 3; return token(shapes[(row + column) % 3], 0, column + 1, row === column) })
+    explanation = 'The three shapes shift one position left on each row, count is fixed by column, and only diagonal cells are filled.'
   } else if (variant === 'row-rotation') {
     const start = rng.pick([0, 45, 90]); const across = rng.pick([45, 90]); const down = rng.pick([45, 90])
     cells = Array.from({ length: 9 }, (_, index) => { const row = Math.floor(index / 3); const column = index % 3; return token(shape, start + row * down + column * across, row + 1, column % 2 === 0) })
@@ -850,14 +896,18 @@ function matrix(level: number, seed: number, rng: RandomSource): Exercise {
     explanation = `Rows rotate ${across}° per step; columns add ${down}°. Count cycles 1–2–3 and fill follows a checkerboard pattern.`
   } else if (variant === 'attribute-latin') {
     const shapes = rng.shuffle<VisualToken['shape']>(['circle', 'triangle', 'diamond'])
-    cells = Array.from({ length: 9 }, (_, index) => { const row = Math.floor(index / 3); const column = index % 3; return token(shapes[(row + column) % 3], (row * 90 + column * 45), (row * 2 + column) % 3 + 1, row === column) })
-    explanation = 'Shape and count each cycle through three values with a row shift; only the main diagonal is filled.'
+    cells = Array.from({ length: 9 }, (_, index) => { const row = Math.floor(index / 3); const column = index % 3; return token(shapes[(row + column) % 3], 0, (row * 2 + column) % 3 + 1, (row + column) % 2 === 0) })
+    explanation = 'Shape and count each cycle through three values on different shifts, while fill follows a checkerboard. All three rules agree on the missing tile.'
   } else if (variant === 'row-composition' || variant === 'column-composition') {
-    const rows = [
-      [token(shape, 0, 1, true), token(shape, 90, 1, false)],
-      [token(shape, 90, 1, false), token(shape, 90, 2, true)],
-      [token(shape, 0, 2, true), token(shape, 180, 1, false)],
-    ]
+    const countPairs = rng.shuffle([[1, 1], [1, 2], [2, 1]])
+    const fillPairs = rng.shuffle([[true, false], [false, true], [true, true]])
+    const rows = Array.from({ length: 3 }, (_, index) => {
+      const firstRotation = rng.pick([0, 90, 180, 270]); const secondRotation = rng.pick([0, 90, 180, 270])
+      return [
+        token(shape, firstRotation, countPairs[index][0], fillPairs[index][0]),
+        token(shape, secondRotation, countPairs[index][1], fillPairs[index][1]),
+      ]
+    })
     const composed = rows.map(([first, second]) => token(shape, (first.rotation ?? 0) + (second.rotation ?? 0), (first.count ?? 1) + (second.count ?? 1), !!first.filled !== !!second.filled))
     cells = variant === 'row-composition'
       ? rows.flatMap((row, index) => [...row, composed[index]])
@@ -865,7 +915,7 @@ function matrix(level: number, seed: number, rng: RandomSource): Exercise {
     instruction = `In each ${variant === 'row-composition' ? 'row' : 'column'}, the third tile combines the first two.`
     explanation = `The third tile adds the symbol counts and rotations; it is filled only when exactly one source tile is filled.`
   } else {
-    const shapes = rng.shuffle<VisualToken['shape']>(['arrow', 'triangle', 'diamond'])
+    const shapes = rng.shuffle<VisualToken['shape']>(['arrow', 'triangle', 'line'])
     cells = Array.from({ length: 9 }, (_, index) => { const row = Math.floor(index / 3); const column = index % 3; return token(shapes[(row + column) % 3], row * 45 + column * 90, (row + column * 2) % 3 + 1, (row * 2 + column) % 2 === 0) })
     explanation = 'Moving across changes shape, adds 90° and advances count by two; moving down changes shape, adds 45° and advances count by one.'
   }
@@ -899,16 +949,16 @@ function ruleBreaker(level: number, seed: number, rng: RandomSource): Exercise {
         ? level >= 7 ? ['count-cycle', 'shape-cycle', 'row-signature', 'column-signature', 'dual-attribute'] : ['rotation-grid', 'count-cycle', 'shape-cycle', 'row-signature', 'column-signature']
         : ['row-signature', 'column-signature', 'dual-attribute', 'triple-attribute', 'diagonal-rule']
   const variant = rng.pick(available)
-  const shape = rng.pick<VisualToken['shape']>(['triangle', 'arrow', 'diamond'])
+  const shape = rng.pick<VisualToken['shape']>(['triangle', 'arrow'])
   const shapes: VisualToken['shape'][] = ['circle', 'triangle', 'diamond']
   const breaker = rng.int(0, 8)
   let cells: VisualToken[] = []
   let explanation = ''
 
   if (variant === 'fill-alternation') {
-    cells = Array.from({ length: 9 }, (_, index) => token(shape, 0, 1, index % 2 === 0))
+    cells = Array.from({ length: 9 }, (_, index) => { const row = Math.floor(index / 3); const column = index % 3; return token(shape, 0, 1, (row + column) % 2 === 0) })
     cells[breaker] = { ...cells[breaker], filled: !cells[breaker].filled }
-    explanation = 'Fill should alternate outline/filled from one numbered tile to the next.'
+    explanation = 'Fill should form a checkerboard, alternating both across every row and down every column.'
   } else if (variant === 'rotation-grid') {
     const step = rng.pick([45, 90])
     cells = Array.from({ length: 9 }, (_, index) => { const row = Math.floor(index / 3); const column = index % 3; return token(shape, (row + column) * step, 1, row % 2 === 0) })
@@ -947,12 +997,12 @@ function ruleBreaker(level: number, seed: number, rng: RandomSource): Exercise {
 
   const options = cells.map((_, index) => ({ id: `r${index}`, label: `${index + 1}` }))
   const prompt = rng.pick([
-    'Which tile breaks the grid rule?',
-    'Find the single inconsistent tile',
-    'One tile violates the pattern—which one?',
-    'Identify the odd tile',
+    'Exactly one tile breaks the row-and-column rule. Which one?',
+    'Which single tile must change to restore the grid?',
+    'One tile has one incorrect attribute. Find it.',
+    'Find the only tile inconsistent with both its row and column.',
   ])
-  return { id: id('rule-breaker', seed), family: 'rule-breaker', variant, label: 'Rule Breaker', prompt, instruction: 'Tiles are numbered left to right, top to bottom.', difficulty: level, responseTargetMs: [7500, 10000, 12500, 15000][band], answer: { kind: 'choice', value: `r${breaker}` }, options, visual: { kind: 'tiles', columns: 3, cells }, explanation: `Tile ${breaker + 1} is inconsistent. ${explanation}` }
+  return { id: id('rule-breaker', seed), family: 'rule-breaker', variant, label: 'Rule Breaker', prompt, instruction: 'Tiles are numbered left to right, top to bottom. Compare complete rows and columns before choosing.', difficulty: level, responseTargetMs: [7500, 10000, 12500, 15000][band], answer: { kind: 'choice', value: `r${breaker}` }, options, visual: { kind: 'tiles', columns: 3, cells }, explanation: `Tile ${breaker + 1} is inconsistent. ${explanation}` }
 }
 
 type OrderEdge = [string, string]
@@ -1593,6 +1643,37 @@ function reactionMatch(level: number, seed: number, rng: RandomSource): Exercise
   }
 }
 
+function arrowFocus(level: number, seed: number, rng: RandomSource): Exercise {
+  const targetDirection = rng.pick(['left', 'right'] as const)
+  const position = rng.pick(['above', 'below'] as const)
+  const configuration = rng.pick(level <= 2
+    ? ['aligned', 'aligned', 'middle-opposite']
+    : level <= 6
+      ? ['aligned', 'middle-opposite']
+      : ['aligned', 'middle-opposite', 'middle-opposite'])
+  const flankerDirection = configuration === 'aligned'
+    ? targetDirection
+    : targetDirection === 'left' ? 'right' : 'left'
+  const directions: Array<'left' | 'right'> = [flankerDirection, flankerDirection, targetDirection, flankerDirection, flankerDirection]
+  const responseWindows = [0, 1400, 1280, 1160, 1040, 920, 820, 730, 650, 570, 500]
+  const responseTargets = [0, 680, 630, 580, 530, 480, 435, 395, 355, 320, 285]
+  const baseOnsetDelays = [0, 280, 260, 235, 215, 195, 175, 155, 140, 125, 110]
+  const onsetDelayMs = baseOnsetDelays[level] + rng.int(0, 150)
+  const responseWindowMs = responseWindows[level]
+  const responseTargetMs = responseTargets[level]
+  const variant = `${configuration}-${position}`
+  return {
+    id: id('arrow-focus', seed), family: 'arrow-focus', variant, label: 'Arrow Focus',
+    prompt: 'Which way does the middle arrow point?',
+    instruction: 'Ignore the four outside arrows. React only to the middle arrow.',
+    difficulty: level, responseTargetMs,
+    answer: { kind: 'choice', value: targetDirection },
+    options: [{ id: 'left', label: 'Left' }, { id: 'right', label: 'Right' }],
+    visual: { kind: 'arrow-focus', directions, position, onsetDelayMs, responseWindowMs },
+    explanation: `The middle arrow pointed ${targetDirection}. Faster correct reactions earn more points.`,
+  }
+}
+
 type SpatialPosition = NonNullable<VisualToken['position']>
 
 function normalRotation(value: number) {
@@ -1966,6 +2047,7 @@ const generators: Record<ExerciseFamily, (level: number, seed: number, rng: Rand
   'tile-sequence': tileSequence,
   'arrow-shift': arrowShift,
   'reaction-match': reactionMatch,
+  'arrow-focus': arrowFocus,
   spatial,
   'route-planner': routePlanner,
 }
@@ -1985,23 +2067,44 @@ export function generateVariedExercise(
   const blockedVariants = new Set(recentVariants.slice(-2))
   const blockedPrompts = new Set(recentPrompts)
   let firstCandidate: Exercise | undefined
-  let promptUniqueCandidate: Exercise | undefined
+  let questionUniqueCandidate: Exercise | undefined
   let differentFromLastCandidate: Exercise | undefined
   let freshVariantCandidate: Exercise | undefined
   const lastVariant = recentVariants.at(-1)
 
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
     const candidate = generateExercise(family, level, seed + attempt * 1543)
     firstCandidate ||= candidate
-    const promptIsNew = !blockedPrompts.has(candidate.prompt)
+    const fingerprintIsNew = !blockedPrompts.has(exerciseFingerprint(candidate))
+    const promptIsNew = family === 'matrix' || family === 'rule-breaker'
+      ? fingerprintIsNew
+      : !blockedPrompts.has(candidate.prompt) && fingerprintIsNew
     const variantIsFresh = !candidate.variant || !blockedVariants.has(candidate.variant)
     if (promptIsNew && variantIsFresh) return candidate
     if (variantIsFresh) freshVariantCandidate ||= candidate
     if (promptIsNew && candidate.variant !== lastVariant) differentFromLastCandidate ||= candidate
-    if (promptIsNew) promptUniqueCandidate ||= candidate
+    if (promptIsNew) questionUniqueCandidate ||= candidate
   }
 
-  return freshVariantCandidate || differentFromLastCandidate || promptUniqueCandidate || firstCandidate!
+  const prioritiseQuestionVariety = ['arithmetic', 'percentages', 'fractions', 'ratios', 'averages', 'rates', 'powers', 'estimation', 'matrix', 'rule-breaker'].includes(family)
+  return prioritiseQuestionVariety
+    ? differentFromLastCandidate || questionUniqueCandidate || freshVariantCandidate || firstCandidate!
+    : freshVariantCandidate || differentFromLastCandidate || questionUniqueCandidate || firstCandidate!
+}
+
+export function exerciseFingerprint(exercise: Exercise) {
+  const mathWorking = `${exercise.prompt} ${exercise.instruction || ''} ${exercise.explanation}`
+    .toLowerCase()
+    .replace(/[a-z£]+/g, '')
+    .replace(/\s+/g, '')
+  const correctOption = exercise.answer.kind === 'choice' ? exercise.options?.find((option) => option.id === exercise.answer.value) : undefined
+  const answer = correctOption?.visual
+    ? visualTokenAppearanceKey(correctOption.visual)
+    : Array.isArray(exercise.answer.value) ? exercise.answer.value.join(',') : `${exercise.answer.value}`
+  const visual = exercise.visual?.kind === 'matrix' || exercise.visual?.kind === 'tiles'
+    ? exercise.visual.cells.map((cell) => cell ? visualTokenAppearanceKey(cell) : '?').join(';')
+    : ''
+  return `${exercise.family}|${exercise.variant || ''}|${answer}|${visual}|${mathWorking}`
 }
 
 export function balancedFamilyAt(families: ExerciseFamily[], index: number, seed: number): ExerciseFamily {

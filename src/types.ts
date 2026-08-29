@@ -17,6 +17,7 @@ export type ExerciseFamily =
   | 'tile-sequence'
   | 'arrow-shift'
   | 'reaction-match'
+  | 'arrow-focus'
   | 'spatial'
   | 'route-planner'
 
@@ -62,6 +63,7 @@ export type VisualSpec =
   | { kind: 'sequence'; size: number; path: number[]; cues: SequenceCue[]; targetCue: SequenceCue; flashMs: number; gapMs: number }
   | { kind: 'arrow-shift'; size: 5; before: ArrowGridItem[]; after: ArrowGridItem[]; targetCue: SequenceCue; changedCells: number[]; targetCell: number; firstRevealMs: number; gapMs: number; secondRevealMs: number }
   | { kind: 'reaction-match'; leftColor: string; rightColor: string; targetSide: 'left' | 'right'; shape: ReactionShape; previewMs: number; responseWindowMs: number }
+  | { kind: 'arrow-focus'; directions: Array<'left' | 'right'>; position: 'above' | 'below'; onsetDelayMs: number; responseWindowMs: number }
   | { kind: 'spatial-angle'; startAngle: number; endAngle?: number; clockwise: boolean; label?: string }
   | { kind: 'cube-net'; cells: CubeNetCell[] }
   | { kind: 'spatial-solid'; solid: 'cube' }
@@ -168,6 +170,7 @@ export const FAMILY_LABELS: Record<ExerciseFamily, string> = {
   'tile-sequence': 'Sequence Flash',
   'arrow-shift': 'Arrow Shift',
   'reaction-match': 'Reflex Match',
+  'arrow-focus': 'Arrow Focus',
   spatial: 'Spatial Lab',
   'route-planner': 'Route Planner',
 }
@@ -181,7 +184,7 @@ export const LOGIC_FAMILIES: ExerciseFamily[] = [
 ]
 
 export const COGNITIVE_FAMILIES: ExerciseFamily[] = [
-  'data-sprint', 'debug-scan', 'pattern-recall', 'tile-sequence', 'arrow-shift', 'reaction-match', 'spatial', 'route-planner',
+  'data-sprint', 'debug-scan', 'pattern-recall', 'tile-sequence', 'arrow-shift', 'reaction-match', 'arrow-focus', 'spatial', 'route-planner',
 ]
 
 export function isExerciseFamily(value: string): value is ExerciseFamily {
