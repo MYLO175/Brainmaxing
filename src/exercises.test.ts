@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { balancedFamilyAt, generateExercise, generateVariedExercise, isCorrect } from './exercises'
-import { COGNITIVE_FAMILIES, LOGIC_FAMILIES, NUMBER_FAMILIES, type ExerciseFamily } from './types'
+import { balancedFamilyAt, exerciseFingerprint, generateExercise, generateVariedExercise, isCorrect, visualTokenAppearanceKey } from './exercises'
+import { COGNITIVE_FAMILIES, LOGIC_FAMILIES, NUMBER_FAMILIES, type ExerciseFamily, type VisualToken } from './types'
 
 const families: ExerciseFamily[] = [...NUMBER_FAMILIES, ...LOGIC_FAMILIES, ...COGNITIVE_FAMILIES]
 
@@ -130,6 +130,70 @@ describe('exercise generators', () => {
       expect(recentVariants.slice(-2)).not.toContain(exercise.variant)
       variants.push(exercise.variant || '')
       prompts.push(exercise.prompt)
+    }
+  })
+
+  it('treats visually symmetric rotations as the same answer presentation', () => {
+    const shown = (shape: VisualToken['shape'], rotation: number) => visualTokenAppearanceKey({ shape, rotation, count: 1, filled: false })
+    expect(shown('circle', 0)).toBe(shown('circle', 225))
+    expect(shown('square', 0)).toBe(shown('square', 90))
+    expect(shown('diamond', 45)).toBe(shown('diamond', 135))
+    expect(shown('line', 0)).toBe(shown('line', 180))
+    expect(shown('triangle', 0)).not.toBe(shown('triangle', 90))
+    expect(shown('arrow', 0)).not.toBe(shown('arrow', 90))
+  })
+
+  it('gives every matrix question four visibly distinct answer choices', () => {
+    for (let level = 1; level <= 10; level += 1) {
+      for (let seed = 1; seed <= 1200; seed += 1) {
+        const exercise = generateExercise('matrix', level, seed)
+        const appearanceKeys = exercise.options?.map((option) => visualTokenAppearanceKey(option.visual!)) || []
+        expect(appearanceKeys).toHaveLength(4)
+        expect(new Set(appearanceKeys).size).toBe(4)
+        const correct = exercise.options?.find((option) => option.id === exercise.answer.value)
+        expect(correct?.visual).toBeDefined()
+      }
+    }
+  })
+
+  it('creates exactly one rule violation in every 3×3 Rule Breaker grid', () => {
+    const violations = (variant: string, cells: VisualToken[], explanation: string) => cells.flatMap((cell, index) => {
+      const row = Math.floor(index / 3); const column = index % 3
+      let violates = false
+      if (variant === 'fill-alternation' || variant === 'dual-attribute') violates = !!cell.filled !== ((row + column) % 2 === 0)
+      else if (variant === 'rotation-grid') {
+        const step = Number(explanation.match(/advance (\d+)°/)?.[1])
+        violates = cell.rotation !== ((row + column) * step) % 360
+      } else if (variant === 'count-cycle') violates = cell.count !== (row + column) % 3 + 1
+      else if (variant === 'shape-cycle') violates = cell.shape !== ['circle', 'triangle', 'diamond'][(row + column) % 3]
+      else if (variant === 'row-signature') violates = cell.shape !== ['circle', 'triangle', 'diamond'][row]
+      else if (variant === 'column-signature') violates = cell.rotation !== column * 45
+      else if (variant === 'triple-attribute') violates = cell.count !== (row * 2 + column) % 3 + 1
+      else if (variant === 'diagonal-rule') violates = !!cell.filled !== (row === column)
+      return violates ? [index] : []
+    })
+
+    for (let level = 1; level <= 10; level += 1) {
+      for (let seed = 1; seed <= 1200; seed += 1) {
+        const exercise = generateExercise('rule-breaker', level, seed)
+        expect(exercise.visual?.kind).toBe('tiles')
+        if (exercise.visual?.kind !== 'tiles') continue
+        const answerIndex = Number(`${exercise.answer.value}`.slice(1))
+        expect(violations(exercise.variant!, exercise.visual.cells, exercise.explanation)).toEqual([answerIndex])
+      }
+    }
+  })
+
+  it.each(['matrix', 'rule-breaker'] as const)('%s avoids recently seen visual grids', (family) => {
+    const variants: string[] = []
+    const recentQuestions: string[] = []
+    for (let index = 0; index < 50; index += 1) {
+      const exercise = generateVariedExercise(family, 9, 32000 + index * 7919, variants.slice(-4), recentQuestions.slice(-48))
+      const fingerprint = exerciseFingerprint(exercise)
+      expect(recentQuestions).not.toContain(fingerprint)
+      variants.push(exercise.variant || '')
+      recentQuestions.push(exercise.prompt, fingerprint)
+      if (recentQuestions.length > 48) recentQuestions.splice(0, recentQuestions.length - 48)
     }
   })
 
@@ -539,6 +603,82 @@ describe('exercise generators', () => {
       } else {
         expect(exercise.options).toHaveLength(4)
       }
+    }
+  })
+
+  it.each(NUMBER_FAMILIES)('%s never exposes floating-point artefacts in question copy', (family) => {
+    for (let level = 1; level <= 10; level += 1) {
+      for (let seed = 1; seed <= 500; seed += 1) {
+        const exercise = generateExercise(family, level, seed)
+        const visibleCopy = [
+          exercise.prompt,
+          exercise.instruction,
+          exercise.explanation,
+          ...(exercise.options?.map((option) => option.label) || []),
+        ].filter(Boolean).join(' ')
+        expect(visibleCopy).not.toMatch(/\d+\.\d{5,}/)
+        expect(visibleCopy).not.toMatch(/\b(?:NaN|Infinity)\b/)
+      }
+    }
+  })
+
+  it('keeps core division meaningful and foundation arithmetic appropriate', () => {
+    const foundation = Array.from({ length: 1000 }, (_, seed) => generateExercise('arithmetic', 2, seed + 1))
+    expect(foundation.every((exercise) => exercise.variant === 'addition' || exercise.variant === 'subtraction')).toBe(true)
+
+    const coreDivisions = [3, 4, 5].flatMap((level) => Array.from({ length: 1000 }, (_, seed) => generateExercise('arithmetic', level, seed + 1)))
+      .filter((exercise) => exercise.variant === 'division')
+    expect(coreDivisions.length).toBeGreaterThan(300)
+    for (const exercise of coreDivisions) {
+      const [dividend, divisor] = exercise.prompt.split(' ÷ ').map(Number)
+      expect(dividend).toBeGreaterThanOrEqual(24)
+      expect(divisor).toBeGreaterThanOrEqual(4)
+      expect(exercise.answer.value).toBeGreaterThanOrEqual(6)
+    }
+
+    const foundationSubtractions = foundation.filter((exercise) => exercise.variant === 'subtraction')
+    for (const exercise of foundationSubtractions) expect(exercise.answer.value).toBeGreaterThanOrEqual(10)
+  })
+
+  it('uses clean mental-maths answers for average questions', () => {
+    const exercises = [3, 5, 7, 9].flatMap((level) => Array.from({ length: 2000 }, (_, seed) => generateExercise('averages', level, seed + 1)))
+      .filter((exercise) => ['updated-mean', 'weighted-mean', 'combined-group-average'].includes(exercise.variant || ''))
+    expect(exercises.length).toBeGreaterThan(1000)
+    for (const exercise of exercises) {
+      expect(exercise.answer.kind).toBe('number')
+      if (exercise.answer.kind === 'number') {
+        const decimals = Number.isInteger(exercise.answer.value) ? 0 : `${exercise.answer.value}`.split('.')[1]?.length || 0
+        expect(decimals).toBeLessThanOrEqual(1)
+      }
+    }
+  })
+
+  it('keeps mixed-number questions simplified and genuinely fractional', () => {
+    const exercises = Array.from({ length: 4000 }, (_, seed) => generateExercise('fractions', 9, seed + 1))
+      .filter((exercise) => exercise.variant === 'mixed-number-arithmetic')
+    expect(exercises.length).toBeGreaterThan(300)
+    for (const exercise of exercises) {
+      const fractions = [...exercise.prompt.matchAll(/(\d+)\/(\d+)/g)]
+      expect(fractions).toHaveLength(2)
+      for (const match of fractions) {
+        const numerator = Number(match[1]); const denominator = Number(match[2])
+        expect(numerator).toBeLessThan(denominator)
+        expect(Array.from({ length: Math.max(0, numerator - 1) }, (_, index) => index + 2).some((factor) => numerator % factor === 0 && denominator % factor === 0)).toBe(false)
+      }
+      expect(`${exercise.answer.value}`).not.toMatch(/\/1$/)
+    }
+  })
+
+  it.each(NUMBER_FAMILIES)('%s avoids recent repeated calculations as well as repeated wording', (family) => {
+    const variants: string[] = []
+    const recentQuestions: string[] = []
+    for (let index = 0; index < 40; index += 1) {
+      const exercise = generateVariedExercise(family, 9, 24000 + index * 7919, variants.slice(-4), recentQuestions.slice(-48))
+      expect(recentQuestions).not.toContain(exercise.prompt)
+      expect(recentQuestions).not.toContain(exerciseFingerprint(exercise))
+      variants.push(exercise.variant || '')
+      recentQuestions.push(exercise.prompt, exerciseFingerprint(exercise))
+      if (recentQuestions.length > 48) recentQuestions.splice(0, recentQuestions.length - 48)
     }
   })
 

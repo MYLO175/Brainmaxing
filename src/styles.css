@@ -494,8 +494,8 @@ kbd { font-family: 'DM Mono'; padding: 2px 5px; border: 1px solid currentColor; 
 .tile-index-options button { min-width: 0; padding: 10px 5px; font-size: 13px; }
 .feedback-copy.explanation { height: 45px; max-width: 650px; margin: 13px auto 0; line-height: 1.5; }
 
-.visual-grid { margin: 0 auto 8px; display: grid; gap: 5px; width: 228px; padding: 7px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.46); }
-.visual-grid.tiles { width: 252px; }
+.visual-grid { margin: 0 auto 8px; display: grid; gap: 5px; width: 270px; padding: 7px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.46); }
+.visual-grid.tiles { width: 290px; }
 .visual-grid.tiles.position-guide-grid { width: 270px; padding: 9px; }
 .visual-cell { aspect-ratio: 1; min-width: 0; position: relative; border: 1px solid #d7d4c9; border-radius: 7px; background: #fffef9; display: grid; place-items: center; color: #292b25; overflow: hidden; }
 .visual-cell .glyph { width: 90%; height: 90%; }

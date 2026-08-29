@@ -5,7 +5,7 @@ import {
   Layers3, ListOrdered, Menu, Percent, Play, RotateCw, Route, Settings2, Shapes, Sigma,
   Sparkles, Target, TimerReset, TrendingUp, Trophy, X, Zap,
 } from 'lucide-react'
-import { balancedFamilyAt, generateExercise, generateVariedExercise, isCorrect } from './exercises'
+import { balancedFamilyAt, exerciseFingerprint, generateExercise, generateVariedExercise, isCorrect } from './exercises'
 import {
   COGNITIVE_FAMILIES, FAMILY_LABELS, LOGIC_FAMILIES, NUMBER_FAMILIES, isExerciseFamily,
   type AnswerValue, type Attempt, type Difficulty, type Exercise, type ExerciseFamily,
@@ -353,13 +353,14 @@ function PracticeLab({ track, families, preferences, sessions, onPreferences, on
 
 function Glyph({ token, size = 64, positionGuide = false }: { token: VisualToken; size?: number; positionGuide?: boolean }) {
   const count = token.count || 1
+  const glyphScale = count === 1 ? 1 : count === 2 ? .72 : .58
   const edgeOffset = positionGuide ? 27 : 18
   const positionOffset: Record<NonNullable<VisualToken['position']>, [number, number]> = { center: [0, 0], top: [0, -edgeOffset], right: [edgeOffset, 0], bottom: [0, edgeOffset], left: [-edgeOffset, 0] }
   const [offsetX, offsetY] = positionOffset[token.position || 'center']
-  const baseCenters = count === 1 ? [[50, 50]] : count === 2 ? [[34, 50], [66, 50]] : [[30, 55], [50, 32], [70, 55]]
+  const baseCenters = count === 1 ? [[50, 50]] : count === 2 ? [[32, 50], [68, 50]] : [[28, 59], [50, 27], [72, 59]]
   const centers = baseCenters.map(([x, y]) => [x + offsetX, y + offsetY])
   const fill = token.filled ? 'currentColor' : 'none'
-  const common = { fill, stroke: 'currentColor', strokeWidth: 5, strokeLinejoin: 'round' as const }
+  const common = { fill, stroke: 'currentColor', strokeWidth: count === 1 ? 5 : 4, strokeLinejoin: 'round' as const }
   const anchors: Array<{ position: NonNullable<VisualToken['position']>; x: number; y: number }> = [
     { position: 'center', x: 50, y: 50 }, { position: 'top', x: 50, y: 23 }, { position: 'right', x: 77, y: 50 }, { position: 'bottom', x: 50, y: 77 }, { position: 'left', x: 23, y: 50 },
   ]
@@ -370,13 +371,13 @@ function Glyph({ token, size = 64, positionGuide = false }: { token: VisualToken
       const active = anchor.position === (token.position || 'center')
       return <circle key={anchor.position} className={active ? 'active' : ''} cx={anchor.x} cy={anchor.y} r={active ? 22 : 2.8} style={{ fill: active ? '#e6ff8b' : '#d5d6ce', stroke: active ? '#28594b' : '#fffef9', strokeWidth: active ? 1.8 : 1.4 }} />
     })}
-  </g>}{centers.slice(0, count).map(([x, y], index) => <g key={index} transform={`rotate(${token.rotation || 0} ${x} ${y})`}>
-    {token.shape === 'circle' ? <circle cx={x} cy={y} r="12" {...common} />
-      : token.shape === 'square' ? <rect x={x - 12} y={y - 12} width="24" height="24" rx="2" {...common} />
-        : token.shape === 'diamond' ? <rect x={x - 11} y={y - 11} width="22" height="22" transform={`rotate(45 ${x} ${y})`} {...common} />
-          : token.shape === 'triangle' ? <path d={`M ${x} ${y - 14} L ${x + 14} ${y + 12} L ${x - 14} ${y + 12} Z`} {...common} />
-            : token.shape === 'line' ? <line x1={x - 17} y1={y} x2={x + 17} y2={y} {...common} />
-              : <path d={`M ${x - 18} ${y - 6} H ${x + 5} V ${y - 16} L ${x + 22} ${y} L ${x + 5} ${y + 16} V ${y + 6} H ${x - 18} Z`} {...common} />}
+  </g>}{centers.slice(0, count).map(([x, y], index) => <g key={index} transform={`translate(${x} ${y}) rotate(${token.rotation || 0}) scale(${glyphScale})`}>
+    {token.shape === 'circle' ? <circle cx="0" cy="0" r="12" {...common} />
+      : token.shape === 'square' ? <rect x="-12" y="-12" width="24" height="24" rx="2" {...common} />
+        : token.shape === 'diamond' ? <rect x="-11" y="-11" width="22" height="22" transform="rotate(45)" {...common} />
+          : token.shape === 'triangle' ? <path d="M 0 -14 L 14 12 L -14 12 Z" {...common} />
+            : token.shape === 'line' ? <line x1="-17" y1="0" x2="17" y2="0" {...common} />
+              : <path d="M -18 -6 H 5 V -16 L 22 0 L 5 16 V 6 H -18 Z" {...common} />}
   </g>)}{positionGuide && <circle className="active-anchor-ring" cx={activeAnchor.x} cy={activeAnchor.y} r="22" />}</svg>
 }
 
@@ -950,7 +951,7 @@ function PracticeSession({ config, onFinish, onExit }: { config: SessionConfig; 
   const [counter, setCounter] = useState(0)
   const [exercise, setExercise] = useState(() => generateExercise(balancedFamilyAt(config.families, 0, sessionSeed), initialLevel, sessionSeed))
   const recentVariants = useRef<Record<string, string[]>>({ [exercise.family]: exercise.variant ? [exercise.variant] : [] })
-  const recentPrompts = useRef<string[]>([exercise.prompt])
+  const recentQuestions = useRef<string[]>([exercise.prompt, exerciseFingerprint(exercise)])
   const [value, setValue] = useState('')
   const [attempts, setAttempts] = useState<Attempt[]>([])
   const attemptsRef = useRef<Attempt[]>([])
@@ -982,9 +983,9 @@ function PracticeSession({ config, onFinish, onExit }: { config: SessionConfig; 
     const nextCounter = counter + 1
     const family = balancedFamilyAt(config.families, nextCounter, sessionSeed)
     const familyVariants = recentVariants.current[family] || []
-    const candidate = generateVariedExercise(family, nextLevels[family], sessionSeed + nextCounter * 7919, familyVariants, recentPrompts.current)
+    const candidate = generateVariedExercise(family, nextLevels[family], sessionSeed + nextCounter * 7919, familyVariants, recentQuestions.current)
     recentVariants.current[family] = [...familyVariants, ...(candidate.variant ? [candidate.variant] : [])].slice(-4)
-    recentPrompts.current = [...recentPrompts.current, candidate.prompt].slice(-12)
+    recentQuestions.current = [...recentQuestions.current, candidate.prompt, exerciseFingerprint(candidate)].slice(-48)
     setCounter(nextCounter)
     setExercise(candidate)
     setValue('')
@@ -999,7 +1000,7 @@ function PracticeSession({ config, onFinish, onExit }: { config: SessionConfig; 
   return <div className="session-screen">
     {!untimed && <div className="session-progress" style={{ width: `${(config.duration - remaining) / config.duration * 100}%` }} />}
     <header className="session-header"><Brand /><div className="session-label"><span className="pulse-dot" /> {config.label} · {config.difficulty}{untimed ? ' · Practice' : ''}</div><div className="session-header-actions">{untimed && <button className="finish-practice-button" aria-label="Finish practice" disabled={!attempts.length} onClick={finish}><Check size={14} /><span>Finish practice</span></button>}<button className="pause-button" onClick={() => setPaused((current) => !current)}>{paused ? <Play size={14} /> : 'Ⅱ'} {paused ? 'Resume' : 'Pause'}</button><button className="icon-button" onClick={onExit}><X size={20} /></button></div></header>
-    <main className={`session-main ${feedback || ''}`}><div className="session-metric left-metric"><span><Flame size={18} /> Streak</span><strong>{streak}</strong><small>{streak >= 5 ? 'On fire' : 'Build momentum'}</small></div><div className="session-metric right-metric">{reactionOnly ? <><span><Zap size={18} /> Points</span><strong>{reactionPoints}</strong><small>Speed-weighted total</small></> : <><span><Target size={18} /> Accuracy</span><strong>{attempts.length ? Math.round(correctCount / attempts.length * 100) : 100}%</strong><small>{correctCount} of {attempts.length} correct</small></>}</div><section className="question-area exercise-question-area"><div className={`timer-display ${untimed ? 'practice-timer' : ''}`}><Clock3 size={18} /><span>{formatTime(untimed ? elapsed : remaining)}</span>{untimed && <small>elapsed</small>}</div><p className="question-count">{exercise.label} <span>·</span> Level {levels[exercise.family]} <span>·</span> {levelName(levels[exercise.family])}</p><ExercisePrompt key={exercise.id} exercise={exercise} onAnswer={answer} value={value} onValue={setValue} feedback={feedback} disabled={paused || !!feedback} controls={config.controls} /><div className={`feedback-copy explanation ${feedback ? 'show' : ''}`}>{feedback === 'correct' ? `Correct. ${exercise.explanation}` : feedback === 'incorrect' ? `Not quite. ${exercise.explanation}` : ''}</div></section><div className="session-footer-note"><Keyboard size={15} /> {isReactionFamily(exercise.family) ? `Use ${formatControlKey(config.controls?.leftKey || 'ArrowLeft')} / ${formatControlKey(config.controls?.rightKey || 'ArrowRight')} or tap a side` : 'Use the keyboard or click an answer'}</div></main>
+    <main className={`session-main ${feedback || ''}`}><div className="session-metric left-metric"><span><Flame size={18} /> Streak</span><strong>{streak}</strong><small>{streak >= 5 ? 'On fire' : 'Build momentum'}</small></div><div className="session-metric right-metric">{reactionOnly ? <><span><Zap size={18} /> Points</span><strong>{reactionPoints}</strong><small>Speed-weighted total</small></> : <><span><Target size={18} /> Accuracy</span><strong>{attempts.length ? Math.round(correctCount / attempts.length * 100) : 100}%</strong><small>{correctCount} of {attempts.length} correct</small></>}</div><section className="question-area exercise-question-area"><div className={`timer-display ${untimed ? 'practice-timer' : ''}`}><Clock3 size={18} /><span>{formatTime(untimed ? elapsed : remaining)}</span>{untimed && <small>elapsed</small>}</div><p className="question-count">{exercise.label} <span>·</span> Level {exercise.difficulty} <span>·</span> {levelName(exercise.difficulty)}</p><ExercisePrompt key={exercise.id} exercise={exercise} onAnswer={answer} value={value} onValue={setValue} feedback={feedback} disabled={paused || !!feedback} controls={config.controls} /><div className={`feedback-copy explanation ${feedback ? 'show' : ''}`}>{feedback === 'correct' ? `Correct. ${exercise.explanation}` : feedback === 'incorrect' ? `Not quite. ${exercise.explanation}` : ''}</div></section><div className="session-footer-note"><Keyboard size={15} /> {isReactionFamily(exercise.family) ? `Use ${formatControlKey(config.controls?.leftKey || 'ArrowLeft')} / ${formatControlKey(config.controls?.rightKey || 'ArrowRight')} or tap a side` : 'Use the keyboard or click an answer'}</div></main>
     {paused && <div className="pause-overlay"><div className="pause-card"><TimerReset size={28} /><p>Session paused</p><h2>Catch your breath.</h2><button className="primary-button dark" onClick={() => { setPaused(false); questionStartedAt.current = Date.now() }}>Resume drill <Play size={16} /></button></div></div>}
   </div>
 }
