@@ -58,20 +58,24 @@ describe('exercise generators', () => {
     rates: ['throughput', 'speed-distance', 'travel-time', 'unit-conversion-forward', 'unit-conversion-reverse', 'unit-price', 'scaled-rate', 'resource-chain', 'resource-chain-reverse', 'parallel-throughput', 'average-speed', 'downtime-throughput', 'capacity-planning', 'net-rate', 'converted-distance'],
     powers: ['square', 'cube', 'square-root', 'cube-root', 'powers-of-ten', 'remainder', 'divisibility', 'exponent-product', 'exponent-quotient', 'scientific-multiplication', 'combined-root-power', 'last-digit-power'],
     estimation: ['product', 'sum', 'difference', 'quotient', 'order-of-magnitude', 'percentage-estimate', 'multi-step-estimate', 'budget-estimate'],
-    sequences: [], matrix: [], 'rule-breaker': [], constraints: [], 'data-sprint': [],
+    sequences: ['arithmetic', 'geometric', 'alternating-gaps', 'growing-gaps', 'square-offset', 'interleaved', 'multiply-add', 'alternating-operations', 'gap-cycle', 'recurrence', 'paired-products'],
+    'data-sprint': ['bar-maximum', 'bar-difference', 'bar-total', 'bar-percentage-change', 'table-error-rate', 'table-success-volume', 'table-conditional-total', 'table-projection', 'table-budget-variance', 'table-conversion-yield', 'table-weighted-average', 'table-threshold-performance', 'table-compound-forecast', 'table-efficiency-index', 'table-weighted-cost'],
+    matrix: [], 'rule-breaker': [], constraints: [],
     'debug-scan': [], 'pattern-recall': [], 'tile-sequence': [], 'arrow-shift': [], 'reaction-match': [], 'arrow-focus': [], spatial: [], 'route-planner': [],
   }
 
   const logicVariants: Partial<Record<ExerciseFamily, string[]>> = {
-    sequences: ['arithmetic', 'geometric', 'alternating-gaps', 'growing-gaps', 'square-offset', 'interleaved', 'multiply-add', 'alternating-operations', 'gap-cycle', 'recurrence', 'paired-products'],
     matrix: ['rotation-2x2', 'fill-2x2', 'count-cycle', 'shape-cycle', 'row-rotation', 'dual-axis', 'attribute-latin', 'row-composition', 'column-composition', 'combined-transform'],
     'rule-breaker': ['fill-alternation', 'rotation-grid', 'count-cycle', 'shape-cycle', 'row-signature', 'column-signature', 'dual-attribute', 'triple-attribute', 'diagonal-rule'],
     constraints: ['direct-chain', 'must-be-true', 'branch-order', 'fixed-slot', 'dependency-chain', 'assignment', 'conditional-chain', 'exclusive-branch'],
+    'debug-scan': ['identifier-recall', 'field-recall', 'config-recall', 'incident-recall', 'mapping-recall', 'rule-audit'],
+    spatial: ['double-rotation', 'positioned-rotation', 'reflection', 'reflect-then-rotate', 'rotate-then-reflect', 'inverse-transform', 'three-step-transform', 'angle-between', 'angle-composition', 'cube-net', 'opposite-face'],
+    'route-planner': ['open-grid', 'light-obstacles', 'single-wall', 'checkpoint', 'ordered-checkpoints', 'choose-order', 'double-wall', 'weighted-route'],
   }
 
-  it.each(NUMBER_FAMILIES)('%s exposes every planned Fast Numbers+ variant', (family) => {
+  it.each(NUMBER_FAMILIES)('%s exposes every planned Quick Maths variant', (family) => {
     const found = new Set<string>()
-    for (const level of [2, 5, 6, 9]) {
+    for (const level of [2, 4, 5, 6, 7, 8, 9, 10]) {
       for (let seed = 1; seed <= 800; seed += 1) {
         const variant = generateExercise(family, level, seed).variant
         if (variant) found.add(variant)
@@ -359,7 +363,7 @@ describe('exercise generators', () => {
   it('offers the correct answer for a right-facing triangle reflected top-to-bottom then rotated clockwise', () => {
     const exercise = Array.from({ length: 10000 }, (_, seed) => generateExercise('spatial', 9, seed + 1))
       .find((candidate) => candidate.variant === 'reflect-then-rotate'
-        && candidate.prompt.includes('horizontal centre line')
+        && candidate.prompt.includes('horizontal axis')
         && candidate.prompt.includes('90° clockwise')
         && candidate.visual?.kind === 'tiles'
         && candidate.visual.cells[0].shape === 'triangle'
@@ -373,15 +377,13 @@ describe('exercise generators', () => {
     expect(correct).toMatchObject({ shape: 'triangle', position: 'top', rotation: 180 })
   })
 
-  it('describes every Spatial Lab reflection by its centre line and positional effect', () => {
+  it('describes every Spatial Lab reflection with concise axis wording', () => {
     const exercises = [4, 7, 9].flatMap((level) => Array.from({ length: 1800 }, (_, seed) => generateExercise('spatial', level, seed + 1)))
       .filter((exercise) => exercise.variant?.includes('reflect') || exercise.variant === 'reflection' || exercise.variant === 'three-step-transform')
     expect(exercises.length).toBeGreaterThan(500)
     expect(exercises.every((exercise) => !exercise.prompt.includes('Reflect horizontal') && !exercise.prompt.includes('Reflect vertical'))).toBe(true)
-    for (const exercise of exercises) {
-      if (exercise.prompt.includes('horizontal')) expect(`${exercise.prompt} ${exercise.explanation}`).toContain('top ↔ bottom')
-      if (exercise.prompt.includes('vertical')) expect(`${exercise.prompt} ${exercise.explanation}`).toContain('left ↔ right')
-    }
+    expect(exercises.every((exercise) => exercise.prompt.includes('horizontal axis') || exercise.prompt.includes('vertical axis'))).toBe(true)
+    expect(exercises.every((exercise) => !exercise.prompt.includes('↔') && !exercise.prompt.includes('centre line'))).toBe(true)
   })
 
   it('uses real net and face-folding question structures at upper Spatial Lab levels', () => {
@@ -674,8 +676,12 @@ describe('exercise generators', () => {
     const recentQuestions: string[] = []
     for (let index = 0; index < 40; index += 1) {
       const exercise = generateVariedExercise(family, 9, 24000 + index * 7919, variants.slice(-4), recentQuestions.slice(-48))
-      expect(recentQuestions).not.toContain(exercise.prompt)
-      expect(recentQuestions).not.toContain(exerciseFingerprint(exercise))
+      if (family === 'data-sprint') {
+        expect(variants.slice(-2)).not.toContain(exercise.variant)
+      } else {
+        expect(recentQuestions).not.toContain(exercise.prompt)
+        expect(recentQuestions).not.toContain(exerciseFingerprint(exercise))
+      }
       variants.push(exercise.variant || '')
       recentQuestions.push(exercise.prompt, exerciseFingerprint(exercise))
       if (recentQuestions.length > 48) recentQuestions.splice(0, recentQuestions.length - 48)

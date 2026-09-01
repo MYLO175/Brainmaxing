@@ -3,9 +3,10 @@ import {
   ArrowLeft, ArrowRight, BarChart3, Binary, BrainCircuit, Check, ChevronRight,
   CircleDot, Clock3, Database, Eye, Flame, Gauge, Grid2X2, Home, Keyboard,
   Layers3, ListOrdered, Menu, Percent, Play, RotateCw, Route, Settings2, Shapes, Sigma,
-  Sparkles, Target, TimerReset, TrendingUp, Trophy, X, Zap,
+  Sparkles, Target, TimerReset, TrendingUp, Trophy, Video, X, Zap,
 } from 'lucide-react'
 import { balancedFamilyAt, exerciseFingerprint, generateExercise, generateVariedExercise, isCorrect } from './exercises'
+import HireVue from './HireVue'
 import {
   COGNITIVE_FAMILIES, FAMILY_LABELS, LOGIC_FAMILIES, NUMBER_FAMILIES, isExerciseFamily,
   type AnswerValue, type Attempt, type Difficulty, type Exercise, type ExerciseFamily,
@@ -13,7 +14,7 @@ import {
   type CubeNetCell, type SpatialOptionVisual, type VisualSpec, type VisualToken,
 } from './types'
 
-type View = 'dashboard' | 'numbers' | 'logic' | 'cognitive' | 'session' | 'assessment' | 'results' | 'progress'
+type View = 'dashboard' | 'numbers' | 'logic' | 'cognitive' | 'hirevue' | 'session' | 'assessment' | 'results' | 'progress'
 
 const STORAGE_KEY = 'brainmax-sessions-v2'
 const LEGACY_STORAGE_KEY = 'brainmax-sessions-v1'
@@ -83,6 +84,10 @@ function isReactionFamily(family: string) {
   return family === 'reaction-match' || family === 'arrow-focus'
 }
 
+function isFixedQuestionFamily(family: string) {
+  return family === 'pattern-recall' || family === 'tile-sequence' || family === 'arrow-shift'
+}
+
 export function rebindReactionKeys(current: { leftKey: string; rightKey: string }, side: 'left' | 'right', key: string) {
   const nextKey = normalizeReactionKey(key)
   const leftKey = normalizeReactionKey(current.leftKey)
@@ -101,12 +106,14 @@ export function bestCorrectRecord(
   label: string,
   difficulty: Difficulty,
   duration: number,
+  questionCount?: number,
 ) {
   const matching = sessions.filter((session) => (
     session.track === track
     && session.label === label
     && session.difficulty === difficulty
     && resultDurationSetting(session) === duration
+    && (questionCount === undefined || session.questionCount === questionCount)
   ))
   return matching.length ? Math.max(...matching.map((session) => session.correct)) : null
 }
@@ -206,14 +213,23 @@ export function buildSessionResult(config: SessionConfig, attempts: Attempt[], e
     : 0
   const volumeTarget = config.simulation || config.duration === 0 ? Math.max(1, attempts.length) : Math.max(6, config.duration / 6)
   const volume = Math.min(1, completed.length / Math.max(1, volumeTarget))
+  const reactionOnly = config.families.every(isReactionFamily)
+  const fixedQuestionSession = !!config.questionCount && config.families.every(isFixedQuestionFamily)
+  const reactionPoints = attempts.reduce((sum, attempt) => sum + (attempt.points || 0), 0)
+  const reactionSpeed = attempts.length ? reactionPoints / (attempts.length * 1000) : 0
+  const score = reactionOnly
+    ? Math.round((accuracy * .35 + reactionSpeed * .65) * 100)
+    : fixedQuestionSession
+      ? Math.round(accuracy * 100)
+      : Math.round((accuracy * .65 + speed * .22 + volume * .13) * 100)
   return {
     schemaVersion: 2, id: Date.now(), date: new Date().toISOString(), track: config.track,
-    label: config.label, difficulty: config.difficulty, configuredDuration: config.duration,
+    label: config.label, difficulty: config.difficulty, configuredDuration: config.duration, questionCount: config.questionCount,
     duration: Math.max(1, elapsed), correct,
     total: attempts.length, skipped: attempts.filter((attempt) => attempt.skipped).length, bestStreak,
     averageMs: responseTimes.length ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length) : 0,
-    medianMs: median(responseTimes), score: Math.round((accuracy * .65 + speed * .22 + volume * .13) * 100),
-    points: attempts.reduce((sum, attempt) => sum + (attempt.points || 0), 0), breakdown,
+    medianMs: median(responseTimes), score,
+    points: reactionPoints, breakdown,
   }
 }
 
@@ -223,7 +239,7 @@ function Brand() {
 
 function Sidebar({ view, onNavigate, open, onClose }: { view: View; onNavigate: (view: View) => void; open: boolean; onClose: () => void }) {
   const go = (next: View) => { onNavigate(next); onClose() }
-  return <><button className={`nav-backdrop ${open ? 'visible' : ''}`} onClick={onClose} aria-label="Close menu" /><aside className={`sidebar ${open ? 'mobile-open' : ''}`}><div><div className="sidebar-brand-row"><Brand /><button className="icon-button sidebar-close" onClick={onClose}><X size={18} /></button></div><nav className="main-nav"><button className={view === 'dashboard' ? 'active' : ''} onClick={() => go('dashboard')}><Home size={18} /> Home</button><button className={['numbers', 'logic', 'cognitive'].includes(view) ? 'active' : ''} onClick={() => go('numbers')}><Grid2X2 size={18} /> Practice</button><button className={view === 'progress' ? 'active' : ''} onClick={() => go('progress')}><BarChart3 size={18} /> Progress</button></nav><p className="nav-label">Your training</p><nav className="main-nav sub-nav"><button onClick={() => go('numbers')}><Zap size={18} /> Fast Numbers+ <span className="nav-dot" /></button><button onClick={() => go('logic')}><Binary size={18} /> Logic Lab <span className="nav-dot lavender-dot" /></button><button onClick={() => go('cognitive')}><BrainCircuit size={18} /> Cognitive Games <span className="nav-dot peach-dot" /></button></nav></div><div className="sidebar-bottom"><div className="upgrade-card"><div className="upgrade-icon"><Sparkles size={17} /></div><strong>Build assessment fluency.</strong><p>Short, deliberate practice compounds quickly.</p></div><div className="profile-row"><span className="avatar">MM</span><span><strong>My training</strong><small>Stored on this device</small></span><Settings2 size={16} /></div></div></aside></>
+  return <><button className={`nav-backdrop ${open ? 'visible' : ''}`} onClick={onClose} aria-label="Close menu" /><aside className={`sidebar ${open ? 'mobile-open' : ''}`}><div><div className="sidebar-brand-row"><Brand /><button className="icon-button sidebar-close" onClick={onClose}><X size={18} /></button></div><nav className="main-nav"><button className={view === 'dashboard' ? 'active' : ''} onClick={() => go('dashboard')}><Home size={18} /> Home</button><button className={['numbers', 'logic', 'cognitive'].includes(view) ? 'active' : ''} onClick={() => go('numbers')}><Grid2X2 size={18} /> Practice</button><button className={view === 'hirevue' ? 'active' : ''} onClick={() => go('hirevue')}><Video size={18} /> Interview Studio</button><button className={view === 'progress' ? 'active' : ''} onClick={() => go('progress')}><BarChart3 size={18} /> Progress</button></nav><p className="nav-label">Your training</p><nav className="main-nav sub-nav"><button onClick={() => go('numbers')}><Zap size={18} /> Quick Maths <span className="nav-dot" /></button><button onClick={() => go('logic')}><Binary size={18} /> Logic Lab <span className="nav-dot lavender-dot" /></button><button onClick={() => go('cognitive')}><BrainCircuit size={18} /> Cognitive Games <span className="nav-dot peach-dot" /></button><button onClick={() => go('hirevue')}><Video size={18} /> HireVue practice <span className="nav-dot video-dot" /></button></nav></div><div className="sidebar-bottom"><div className="upgrade-card"><div className="upgrade-icon"><Sparkles size={17} /></div><strong>Build assessment fluency.</strong><p>Short, deliberate practice compounds quickly.</p></div><div className="profile-row"><span className="avatar">MM</span><span><strong>My training</strong><small>Stored on this device</small></span><Settings2 size={16} /></div></div></aside></>
 }
 
 function Topbar({ title, streak, onMenu }: { title: string; streak: number; onMenu: () => void }) {
@@ -250,19 +266,22 @@ function Dashboard({ sessions, onNavigate, onStart }: { sessions: SessionResult[
     })
     return scores.sort((a, b) => a.accuracy - b.accuracy || a.attempts - b.attempts).slice(0, 5).map((item) => item.family)
   }, [sessions])
-  return <div className="page dashboard-page"><section className="welcome-row"><div><p className="eyebrow">{todayLabel}</p><h1>Build a sharper mind.</h1><p>Original drills for the reasoning patterns behind technical assessments.</p></div><div className="daily-goal"><div className="goal-ring" style={{ background: `conic-gradient(var(--ink) ${Math.min(100, today / DAILY_GOAL * 100)}%, #dedcd2 0)` }}><span>{Math.min(today, DAILY_GOAL)}</span><small>/ {DAILY_GOAL}</small></div><div><strong>Daily goal</strong><p>{today >= DAILY_GOAL ? 'Goal complete' : `${DAILY_GOAL - today} drills left today`}</p></div></div></section><section className="hero-card"><div className="hero-grid" /><div className="hero-copy"><span className="live-badge"><span /> DAILY WARM-UP</span><h2>Five minutes.<br /><em>Fully switched on.</em></h2><p>An adaptive mix built from the skills that need the most attention.</p><div className="hero-actions"><button className="primary-button light" onClick={() => onStart({ track: 'cognitive', label: 'Daily warm-up', families: warmupFamilies, difficulty: 'Adaptive', duration: 300 })}><Play size={17} fill="currentColor" /> Start warm-up</button><button className="text-button light-text" onClick={() => onNavigate('numbers')}>Choose a drill <ArrowRight size={16} /></button></div></div><div className="hero-visual"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="question-preview"><small>MIXED REASONING</small><span>3 · 7 · 13 · ?</span><div><i /><i /><i /></div></div><span className="float-stat accuracy-float"><Check size={14} /> adaptive level</span><span className="float-stat speed-float"><Zap size={14} /> 5 min</span></div></section><div className="section-heading"><div><p className="eyebrow">Training tracks</p><h3>Choose your focus</h3></div></div><section className="mode-grid"><button className="mode-card" onClick={() => onNavigate('numbers')}><span className="mode-icon chartreuse"><Sigma size={24} /></span><span className="mode-status">8 skill families</span><strong>Fast Numbers+</strong><p>Mental maths, ratios, rates, fractions and estimation.</p><span className="mode-meta"><Clock3 size={14} /> 30 sec–5 min <ChevronRight size={17} /></span></button><button className="mode-card" onClick={() => onNavigate('logic')}><span className="mode-icon lavender"><Shapes size={24} /></span><span className="mode-status neutral">Visual + deductive</span><strong>Logic Lab</strong><p>Sequences, matrices, rule breaking and constraints.</p><span className="mode-meta"><Clock3 size={14} /> 1–3 min <ChevronRight size={17} /></span></button><button className="mode-card" onClick={() => onNavigate('cognitive')}><span className="mode-icon peach"><BrainCircuit size={24} /></span><span className="mode-status neutral">{COGNITIVE_FAMILIES.length} game families</span><strong>Cognitive Games</strong><p>Data interpretation, precision, pattern memory, spatial thinking and planning.</p><span className="mode-meta"><Clock3 size={14} /> 30 sec–5 min <ChevronRight size={17} /></span></button></section><div className="section-heading stats-heading"><div><p className="eyebrow">Your performance</p><h3>At a glance</h3></div><button className="text-button" onClick={() => onNavigate('progress')}>Full progress <ArrowRight size={16} /></button></div><section className="stats-grid"><div className="stat-card"><span className="stat-icon"><Target size={18} /></span><p>Overall accuracy</p><strong>{total ? `${Math.round(correct / total * 100)}%` : '—'}</strong><small>{total ? `${correct} of ${total} correct` : 'Complete your first drill'}</small></div><div className="stat-card"><span className="stat-icon"><Flame size={18} /></span><p>Best streak</p><strong>{sessions.length ? Math.max(...sessions.map((s) => s.bestStreak)) : '—'}</strong><small>Correct answers in a row</small></div><div className="stat-card"><span className="stat-icon"><Gauge size={18} /></span><p>Median response</p><strong>{sessions[0]?.medianMs ? `${(sessions[0].medianMs / 1000).toFixed(1)}s` : '—'}</strong><small>Latest session</small></div><div className="stat-card trend-card"><div><span className="stat-icon"><BarChart3 size={18} /></span><p>Latest score</p><strong>{sessions[0]?.score ?? '—'}</strong></div><MiniBars values={sessions.slice(0, 8).reverse().map((s) => s.score)} /></div></section></div>
+  return <div className="page dashboard-page"><section className="welcome-row"><div><p className="eyebrow">{todayLabel}</p><h1>Build a sharper mind.</h1><p>Original drills for the reasoning patterns behind technical assessments.</p></div><div className="daily-goal"><div className="goal-ring" style={{ background: `conic-gradient(var(--ink) ${Math.min(100, today / DAILY_GOAL * 100)}%, #dedcd2 0)` }}><span>{Math.min(today, DAILY_GOAL)}</span><small>/ {DAILY_GOAL}</small></div><div><strong>Daily goal</strong><p>{today >= DAILY_GOAL ? 'Goal complete' : `${DAILY_GOAL - today} drills left today`}</p></div></div></section><section className="hero-card"><div className="hero-grid" /><div className="hero-copy"><span className="live-badge"><span /> DAILY WARM-UP</span><h2>Five minutes.<br /><em>Fully switched on.</em></h2><p>An adaptive mix built from the skills that need the most attention.</p><div className="hero-actions"><button className="primary-button light" onClick={() => onStart({ track: 'cognitive', label: 'Daily warm-up', families: warmupFamilies, difficulty: 'Adaptive', duration: 300 })}><Play size={17} fill="currentColor" /> Start warm-up</button><button className="text-button light-text" onClick={() => onNavigate('numbers')}>Choose a drill <ArrowRight size={16} /></button></div></div><div className="hero-visual"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="question-preview"><small>MIXED REASONING</small><span>3 · 7 · 13 · ?</span><div><i /><i /><i /></div></div><span className="float-stat accuracy-float"><Check size={14} /> adaptive level</span><span className="float-stat speed-float"><Zap size={14} /> 5 min</span></div></section><div className="section-heading"><div><p className="eyebrow">Training tracks</p><h3>Choose your focus</h3></div></div><section className="mode-grid"><button className="mode-card" onClick={() => onNavigate('numbers')}><span className="mode-icon chartreuse"><Sigma size={24} /></span><span className="mode-status">{NUMBER_FAMILIES.length} skill families</span><strong>Quick Maths</strong><p>Mental maths, sequences and data interpretation.</p><span className="mode-meta"><Clock3 size={14} /> 30 sec–5 min <ChevronRight size={17} /></span></button><button className="mode-card" onClick={() => onNavigate('logic')}><span className="mode-icon lavender"><Shapes size={24} /></span><span className="mode-status neutral">Visual + deductive</span><strong>Logic Lab</strong><p>Matrices, constraints, precision, spatial reasoning and planning.</p><span className="mode-meta"><Clock3 size={14} /> 30 sec–5 min <ChevronRight size={17} /></span></button><button className="mode-card" onClick={() => onNavigate('cognitive')}><span className="mode-icon peach"><BrainCircuit size={24} /></span><span className="mode-status neutral">{COGNITIVE_FAMILIES.length} game families</span><strong>Cognitive Games</strong><p>Pattern memory, sequence tracking, attention and reaction speed.</p><span className="mode-meta"><Clock3 size={14} /> fixed rounds + sprints <ChevronRight size={17} /></span></button><button className="mode-card interview-mode-card" onClick={() => onNavigate('hirevue')}><span className="mode-icon interview"><Video size={24} /></span><span className="mode-status neutral">3-question simulation</span><strong>Interview Studio</strong><p>Timed preparation, realistic video answers and private playback.</p><span className="mode-meta"><Clock3 size={14} /> 8–12 min <ChevronRight size={17} /></span></button></section><div className="section-heading stats-heading"><div><p className="eyebrow">Your performance</p><h3>At a glance</h3></div><button className="text-button" onClick={() => onNavigate('progress')}>Full progress <ArrowRight size={16} /></button></div><section className="stats-grid"><div className="stat-card"><span className="stat-icon"><Target size={18} /></span><p>Overall accuracy</p><strong>{total ? `${Math.round(correct / total * 100)}%` : '—'}</strong><small>{total ? `${correct} of ${total} correct` : 'Complete your first drill'}</small></div><div className="stat-card"><span className="stat-icon"><Flame size={18} /></span><p>Best streak</p><strong>{sessions.length ? Math.max(...sessions.map((s) => s.bestStreak)) : '—'}</strong><small>Correct answers in a row</small></div><div className="stat-card"><span className="stat-icon"><Gauge size={18} /></span><p>Median response</p><strong>{sessions[0]?.medianMs ? `${(sessions[0].medianMs / 1000).toFixed(1)}s` : '—'}</strong><small>Latest session</small></div><div className="stat-card trend-card"><div><span className="stat-icon"><BarChart3 size={18} /></span><p>Latest score</p><strong>{sessions[0]?.score ?? '—'}</strong></div><MiniBars values={sessions.slice(0, 8).reverse().map((s) => s.score)} /></div></section></div>
 }
 
 function PracticeLab({ track, families, preferences, sessions, onPreferences, onStart }: { track: Track; families: ExerciseFamily[]; preferences: Preferences; sessions: SessionResult[]; onPreferences: (value: Preferences) => void; onStart: (config: SessionConfig) => void }) {
-  const [selected, setSelected] = useState<ExerciseFamily | 'mixed'>('mixed')
+  const allowMixed = track !== 'cognitive'
+  const [selected, setSelected] = useState<ExerciseFamily | 'mixed'>(() => allowMixed ? 'mixed' : families[0])
   const [bindingSide, setBindingSide] = useState<'left' | 'right' | null>(null)
-  const title = track === 'numbers' ? 'Fast Numbers+' : track === 'logic' ? 'Logic Lab' : 'Cognitive Games'
-  const description = track === 'numbers' ? 'Go beyond arithmetic. Build flexible numerical judgement.' : track === 'logic' ? 'Train the pattern and deduction skills used in abstract reasoning screens.' : 'Train data interpretation, precision, pattern memory, spatial reasoning and planning.'
+  const title = track === 'numbers' ? 'Quick Maths' : track === 'logic' ? 'Logic Lab' : 'Cognitive Games'
+  const description = track === 'numbers' ? 'Build flexible numerical judgement across arithmetic, sequences and data.' : track === 'logic' ? 'Train timed visual, deductive, spatial and planning skills.' : 'Train memory, attention and reaction speed with purpose-built game formats.'
   const activeFamilies = selected === 'mixed' ? families : [selected]
   const Icon = selected === 'mixed' ? BrainCircuit : familyIcons[selected]
   const recordLabel = selected === 'mixed' ? `${title} mix` : FAMILY_LABELS[selected]
-  const currentBest = bestCorrectRecord(sessions, track, recordLabel, preferences.difficulty, preferences.duration)
-  const untimed = preferences.duration === 0
+  const fixedQuestions = selected !== 'mixed' && isFixedQuestionFamily(selected) ? 10 : undefined
+  const effectiveDuration = fixedQuestions ? 0 : preferences.duration
+  const currentBest = bestCorrectRecord(sessions, track, recordLabel, preferences.difficulty, effectiveDuration, fixedQuestions)
+  const untimed = effectiveDuration === 0 && !fixedQuestions
 
   useEffect(() => {
     if (!bindingSide) return
@@ -295,9 +314,9 @@ function PracticeLab({ track, families, preferences, sessions, onPreferences, on
     <section className="builder-layout">
       <div className="builder-panel">
         <div className="builder-section">
-          <div className="step-heading"><span>01</span><div><h3>Choose a drill</h3><p>Select one skill or run a balanced mix.</p></div></div>
+          <div className="step-heading"><span>01</span><div><h3>Choose a drill</h3><p>{allowMixed ? 'Select one skill or run a balanced mix.' : 'Select the cognitive skill you want to train.'}</p></div></div>
           <div className="exercise-card-grid">
-            <button className={`exercise-select ${selected === 'mixed' ? 'selected' : ''}`} onClick={() => setSelected('mixed')}><span><BrainCircuit size={20} /></span><div><strong>Balanced mix</strong><small>Cycle evenly through every skill</small></div>{selected === 'mixed' && <Check size={15} />}</button>
+            {allowMixed && <button className={`exercise-select ${selected === 'mixed' ? 'selected' : ''}`} onClick={() => setSelected('mixed')}><span><BrainCircuit size={20} /></span><div><strong>Balanced mix</strong><small>Cycle evenly through every skill</small></div>{selected === 'mixed' && <Check size={15} />}</button>}
             {families.map((family) => { const FamilyIcon = familyIcons[family]; return <button key={family} className={`exercise-select ${selected === family ? 'selected' : ''}`} onClick={() => setSelected(family)}><span><FamilyIcon size={20} /></span><div><strong>{FAMILY_LABELS[family]}</strong><small>{familyDescriptions[family]}</small></div>{selected === family && <Check size={15} />}</button> })}
           </div>
         </div>
@@ -306,8 +325,10 @@ function PracticeLab({ track, families, preferences, sessions, onPreferences, on
           <div className="segmented-control">{DIFFICULTIES.map((difficulty) => <button key={difficulty} className={preferences.difficulty === difficulty ? 'selected' : ''} onClick={() => onPreferences({ ...preferences, difficulty })}>{difficulty}{difficulty === 'Adaptive' && <Sparkles size={13} />}</button>)}</div>
         </div>
         <div className="builder-section">
-          <div className="step-heading"><span>03</span><div><h3>Choose a timer</h3><p>Use a timed sprint or practise for as long as you like.</p></div></div>
-          <div className="duration-options six-options">{DURATION_OPTIONS.map((duration) => <button key={duration} className={preferences.duration === duration ? 'selected' : ''} onClick={() => onPreferences({ ...preferences, duration })}><strong>{duration === 0 ? '∞' : duration < 60 ? duration : duration / 60}</strong><span>{duration === 0 ? 'practice' : duration < 60 ? 'sec' : 'min'}</span></button>)}</div>
+          <div className="step-heading"><span>03</span><div><h3>{fixedQuestions ? 'Session length' : 'Choose a timer'}</h3><p>{fixedQuestions ? 'This game measures recall across a consistent number of questions, without a countdown.' : 'Use a timed sprint or practise for as long as you like.'}</p></div></div>
+          {fixedQuestions
+            ? <div className="duration-options fixed-question-option"><button className="selected" disabled aria-label={`${fixedQuestions} fixed questions`}><strong>{fixedQuestions}</strong><span>questions</span></button></div>
+            : <div className="duration-options six-options">{DURATION_OPTIONS.map((duration) => <button key={duration} className={preferences.duration === duration ? 'selected' : ''} onClick={() => onPreferences({ ...preferences, duration })}><strong>{duration === 0 ? '∞' : duration < 60 ? duration : duration / 60}</strong><span>{duration === 0 ? 'practice' : duration < 60 ? 'sec' : 'min'}</span></button>)}</div>}
         </div>
         {selected !== 'mixed' && isReactionFamily(selected) && <div className="builder-section reaction-controls-builder">
           <div className="step-heading"><span>04</span><div><h3>Configure laptop keys</h3><p>Click a control, then press the key you want to use.</p></div></div>
@@ -323,27 +344,27 @@ function PracticeLab({ track, families, preferences, sessions, onPreferences, on
         <div className="start-panel-noise" />
         <p className="eyebrow light-eyebrow">Your drill</p>
         <div className="drill-symbol"><Icon size={32} /></div>
-        <h2>{selected === 'mixed' ? title : FAMILY_LABELS[selected]}<br />{untimed ? 'practice' : 'sprint'}</h2>
-        <p className="start-description">{untimed ? 'No countdown. Keep going until you choose to finish, with feedback after every answer.' : 'Coached practice with immediate feedback, concise explanations and adaptive progression.'}</p>
+        <h2>{selected === 'mixed' ? title : FAMILY_LABELS[selected]}<br />{fixedQuestions ? 'challenge' : untimed ? 'practice' : 'sprint'}</h2>
+        <p className="start-description">{fixedQuestions ? `${fixedQuestions} questions with no countdown. Your score is based on recall accuracy.` : untimed ? 'No countdown. Keep going until you choose to finish, with feedback after every answer.' : 'Coached practice with immediate feedback, concise explanations and adaptive progression.'}</p>
         <div className="drill-summary">
-          <span><Clock3 size={16} /><i>Timer</i><strong>{formatDurationSetting(preferences.duration)}</strong></span>
+          <span><Clock3 size={16} /><i>{fixedQuestions ? 'Length' : 'Timer'}</i><strong>{fixedQuestions ? `${fixedQuestions} Qs` : formatDurationSetting(preferences.duration)}</strong></span>
           <span><Gauge size={16} /><i>Level</i><strong>{preferences.difficulty}</strong></span>
           <span><Trophy size={16} /><i>Best correct</i><strong>{currentBest ?? '—'}</strong></span>
         </div>
-        <button className="primary-button light wide" onClick={() => onStart({ track, label: recordLabel, families: activeFamilies, difficulty: preferences.difficulty, duration: preferences.duration, controls: { leftKey: preferences.reactionLeftKey, rightKey: preferences.reactionRightKey } })}><Play size={17} fill="currentColor" /> {untimed ? 'Start practice' : 'Begin drill'}</button>
+        <button className="primary-button light wide" onClick={() => onStart({ track, label: recordLabel, families: activeFamilies, difficulty: preferences.difficulty, duration: effectiveDuration, questionCount: fixedQuestions, controls: { leftKey: preferences.reactionLeftKey, rightKey: preferences.reactionRightKey } })}><Play size={17} fill="currentColor" /> {untimed ? 'Start practice' : 'Begin drill'}</button>
       </aside>
     </section>
     <section className="record-board">
-      <div className="record-board-heading"><div><p className="eyebrow">Personal bests</p><h3>Correct answers by level and timer</h3></div><p>{recordLabel} · records count correct answers only</p></div>
+      <div className="record-board-heading"><div><p className="eyebrow">Personal bests</p><h3>{fixedQuestions ? `Correct answers in ${fixedQuestions} questions` : 'Correct answers by level and timer'}</h3></div><p>{recordLabel} · records count correct answers only</p></div>
       <div className="record-table-wrap">
         <div className="record-table" role="table" aria-label={`${recordLabel} correct-answer records`}>
           <div className="record-table-row record-table-head" role="row">
             <span role="columnheader">Level</span>
-            {DURATION_OPTIONS.map((duration) => <span key={duration} role="columnheader">{shortDurationSetting(duration)}</span>)}
+            {(fixedQuestions ? [0] : DURATION_OPTIONS).map((duration) => <span key={duration} role="columnheader">{fixedQuestions ? `${fixedQuestions} questions` : shortDurationSetting(duration)}</span>)}
           </div>
           {DIFFICULTIES.map((difficulty) => <div className="record-table-row" role="row" key={difficulty}>
             <span role="rowheader">{difficulty}</span>
-            {DURATION_OPTIONS.map((duration) => { const record = bestCorrectRecord(sessions, track, recordLabel, difficulty, duration); const current = preferences.difficulty === difficulty && preferences.duration === duration; return <span role="cell" key={duration} className={current ? 'current-record' : ''}><strong>{record ?? '—'}</strong><small>{record === null ? 'no run' : 'correct'}</small></span> })}
+            {(fixedQuestions ? [0] : DURATION_OPTIONS).map((duration) => { const record = bestCorrectRecord(sessions, track, recordLabel, difficulty, duration, fixedQuestions); const current = preferences.difficulty === difficulty && effectiveDuration === duration; return <span role="cell" key={duration} className={current ? 'current-record' : ''}><strong>{record ?? '—'}</strong><small>{record === null ? 'no run' : 'correct'}</small></span> })}
           </div>)}
         </div>
       </div>
@@ -944,7 +965,8 @@ function ExercisePrompt({ exercise, onAnswer, value, onValue, feedback, disabled
 }
 
 function PracticeSession({ config, onFinish, onExit }: { config: SessionConfig; onFinish: (config: SessionConfig, attempts: Attempt[], elapsed: number) => void; onExit: () => void }) {
-  const untimed = config.duration === 0
+  const fixedQuestions = config.questionCount
+  const untimed = config.duration === 0 && !fixedQuestions
   const initialLevel = config.difficulty === 'Warm-up' ? 2 : config.difficulty === 'Standard' ? 4 : config.difficulty === 'Hard' ? 9 : 3
   const sessionSeed = useRef(Date.now()).current
   const [levels, setLevels] = useState<Record<string, number>>(() => Object.fromEntries(config.families.map((family) => [family, initialLevel])))
@@ -968,7 +990,7 @@ function PracticeSession({ config, onFinish, onExit }: { config: SessionConfig; 
     const timer = window.setInterval(() => {
       elapsedRef.current += 1
       setElapsed(elapsedRef.current)
-      if (!untimed) setRemaining((current) => {
+      if (!untimed && !fixedQuestions) setRemaining((current) => {
         if (current <= 1) {
           window.clearInterval(timer)
           window.setTimeout(finish, 0)
@@ -978,7 +1000,7 @@ function PracticeSession({ config, onFinish, onExit }: { config: SessionConfig; 
       })
     }, 1000)
     return () => window.clearInterval(timer)
-  }, [finish, paused, untimed])
+  }, [finish, fixedQuestions, paused, untimed])
   const next = useCallback((nextLevels: Record<string, number>) => {
     const nextCounter = counter + 1
     const family = balancedFamilyAt(config.families, nextCounter, sessionSeed)
@@ -992,15 +1014,15 @@ function PracticeSession({ config, onFinish, onExit }: { config: SessionConfig; 
     setFeedback(null)
     questionStartedAt.current = Date.now()
   }, [config.families, counter, sessionSeed])
-  const answer: ReactionAnswer = (given, responseMsOverride, points) => { if (feedback || paused) return; const correct = isCorrect(exercise, given); const responseMs = responseMsOverride ?? Date.now() - questionStartedAt.current; const attempt: Attempt = { exercise, given, correct, skipped: false, responseMs, points }; const updated = [...attemptsRef.current, attempt]; attemptsRef.current = updated; setAttempts(updated); setFeedback(correct ? 'correct' : 'incorrect'); setStreak((current) => correct ? current + 1 : 0); const nextLevels = { ...levels }; if (config.difficulty === 'Adaptive') { if (correct && responseMs < exercise.responseTargetMs) nextLevels[exercise.family] = Math.min(10, levels[exercise.family] + 1); if (!correct) nextLevels[exercise.family] = Math.max(1, levels[exercise.family] - 1); setLevels(nextLevels) } const feedbackMs = exercise.answer.kind === 'sequence' && !correct ? 950 : exercise.answer.kind === 'cell' ? 1100 : isReactionFamily(exercise.family) ? correct ? 850 : 1050 : correct ? 650 : 1200; window.setTimeout(() => next(nextLevels), feedbackMs) }
+  const answer: ReactionAnswer = (given, responseMsOverride, points) => { if (feedback || paused) return; const correct = isCorrect(exercise, given); const responseMs = responseMsOverride ?? Date.now() - questionStartedAt.current; const attempt: Attempt = { exercise, given, correct, skipped: false, responseMs, points }; const updated = [...attemptsRef.current, attempt]; attemptsRef.current = updated; setAttempts(updated); setFeedback(correct ? 'correct' : 'incorrect'); setStreak((current) => correct ? current + 1 : 0); const nextLevels = { ...levels }; if (config.difficulty === 'Adaptive') { if (correct && responseMs < exercise.responseTargetMs) nextLevels[exercise.family] = Math.min(10, levels[exercise.family] + 1); if (!correct) nextLevels[exercise.family] = Math.max(1, levels[exercise.family] - 1); setLevels(nextLevels) } const feedbackMs = exercise.answer.kind === 'sequence' && !correct ? 950 : exercise.answer.kind === 'cell' ? 1100 : isReactionFamily(exercise.family) ? correct ? 850 : 1050 : correct ? 650 : 1200; window.setTimeout(() => fixedQuestions && updated.length >= fixedQuestions ? finish() : next(nextLevels), feedbackMs) }
   useEffect(() => { const handler = (event: KeyboardEvent) => { if (exercise.answer.kind !== 'choice' || exercise.visual?.kind === 'reaction-match' || exercise.visual?.kind === 'arrow-focus' || feedback || paused) return; const option = exercise.options?.[Number(event.key) - 1]; if (option) answer(option.id) }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) })
   const correctCount = attempts.filter((attempt) => attempt.correct).length
   const reactionOnly = config.families.length === 1 && isReactionFamily(config.families[0])
   const reactionPoints = attempts.reduce((sum, attempt) => sum + (attempt.points || 0), 0)
   return <div className="session-screen">
-    {!untimed && <div className="session-progress" style={{ width: `${(config.duration - remaining) / config.duration * 100}%` }} />}
-    <header className="session-header"><Brand /><div className="session-label"><span className="pulse-dot" /> {config.label} · {config.difficulty}{untimed ? ' · Practice' : ''}</div><div className="session-header-actions">{untimed && <button className="finish-practice-button" aria-label="Finish practice" disabled={!attempts.length} onClick={finish}><Check size={14} /><span>Finish practice</span></button>}<button className="pause-button" onClick={() => setPaused((current) => !current)}>{paused ? <Play size={14} /> : 'Ⅱ'} {paused ? 'Resume' : 'Pause'}</button><button className="icon-button" onClick={onExit}><X size={20} /></button></div></header>
-    <main className={`session-main ${feedback || ''}`}><div className="session-metric left-metric"><span><Flame size={18} /> Streak</span><strong>{streak}</strong><small>{streak >= 5 ? 'On fire' : 'Build momentum'}</small></div><div className="session-metric right-metric">{reactionOnly ? <><span><Zap size={18} /> Points</span><strong>{reactionPoints}</strong><small>Speed-weighted total</small></> : <><span><Target size={18} /> Accuracy</span><strong>{attempts.length ? Math.round(correctCount / attempts.length * 100) : 100}%</strong><small>{correctCount} of {attempts.length} correct</small></>}</div><section className="question-area exercise-question-area"><div className={`timer-display ${untimed ? 'practice-timer' : ''}`}><Clock3 size={18} /><span>{formatTime(untimed ? elapsed : remaining)}</span>{untimed && <small>elapsed</small>}</div><p className="question-count">{exercise.label} <span>·</span> Level {exercise.difficulty} <span>·</span> {levelName(exercise.difficulty)}</p><ExercisePrompt key={exercise.id} exercise={exercise} onAnswer={answer} value={value} onValue={setValue} feedback={feedback} disabled={paused || !!feedback} controls={config.controls} /><div className={`feedback-copy explanation ${feedback ? 'show' : ''}`}>{feedback === 'correct' ? `Correct. ${exercise.explanation}` : feedback === 'incorrect' ? `Not quite. ${exercise.explanation}` : ''}</div></section><div className="session-footer-note"><Keyboard size={15} /> {isReactionFamily(exercise.family) ? `Use ${formatControlKey(config.controls?.leftKey || 'ArrowLeft')} / ${formatControlKey(config.controls?.rightKey || 'ArrowRight')} or tap a side` : 'Use the keyboard or click an answer'}</div></main>
+    {fixedQuestions ? <div className="session-progress" style={{ width: `${attempts.length / fixedQuestions * 100}%` }} /> : !untimed && <div className="session-progress" style={{ width: `${(config.duration - remaining) / config.duration * 100}%` }} />}
+    <header className="session-header"><Brand /><div className="session-label"><span className="pulse-dot" /> {config.label} · {config.difficulty}{untimed ? ' · Practice' : fixedQuestions ? ` · ${fixedQuestions} questions` : ''}</div><div className="session-header-actions">{untimed && <button className="finish-practice-button" aria-label="Finish practice" disabled={!attempts.length} onClick={finish}><Check size={14} /><span>Finish practice</span></button>}<button className="pause-button" onClick={() => setPaused((current) => !current)}>{paused ? <Play size={14} /> : 'Ⅱ'} {paused ? 'Resume' : 'Pause'}</button><button className="icon-button" aria-label={`Close ${config.label} and return to its section`} onClick={onExit}><X size={20} /></button></div></header>
+    <main className={`session-main ${feedback || ''}`}><div className="session-metric left-metric"><span><Flame size={18} /> Streak</span><strong>{streak}</strong><small>{streak >= 5 ? 'On fire' : 'Build momentum'}</small></div><div className="session-metric right-metric">{reactionOnly ? <><span><Zap size={18} /> Points</span><strong>{reactionPoints}</strong><small>Speed-weighted total</small></> : <><span><Target size={18} /> Accuracy</span><strong>{attempts.length ? Math.round(correctCount / attempts.length * 100) : 100}%</strong><small>{correctCount} of {attempts.length} correct</small></>}</div><section className="question-area exercise-question-area"><div className={`timer-display ${untimed ? 'practice-timer' : ''}`}>{fixedQuestions ? <><ListOrdered size={18} /><span>{Math.min(attempts.length + 1, fixedQuestions)} / {fixedQuestions}</span><small>question</small></> : <><Clock3 size={18} /><span>{formatTime(untimed ? elapsed : remaining)}</span>{untimed && <small>elapsed</small>}</>}</div><p className="question-count">{exercise.label} <span>·</span> Level {exercise.difficulty} <span>·</span> {levelName(exercise.difficulty)}</p><ExercisePrompt key={exercise.id} exercise={exercise} onAnswer={answer} value={value} onValue={setValue} feedback={feedback} disabled={paused || !!feedback} controls={config.controls} /><div className={`feedback-copy explanation ${feedback ? 'show' : ''}`}>{feedback === 'correct' ? `Correct. ${exercise.explanation}` : feedback === 'incorrect' ? `Not quite. ${exercise.explanation}` : ''}</div></section><div className="session-footer-note"><Keyboard size={15} /> {isReactionFamily(exercise.family) ? `Use ${formatControlKey(config.controls?.leftKey || 'ArrowLeft')} / ${formatControlKey(config.controls?.rightKey || 'ArrowRight')} or tap a side` : 'Use the keyboard or click an answer'}</div></main>
     {paused && <div className="pause-overlay"><div className="pause-card"><TimerReset size={28} /><p>Session paused</p><h2>Catch your breath.</h2><button className="primary-button dark" onClick={() => { setPaused(false); questionStartedAt.current = Date.now() }}>Resume drill <Play size={16} /></button></div></div>}
   </div>
 }
@@ -1030,9 +1052,42 @@ function Results({ result, attempts, onHome, onRetry }: { result: SessionResult;
   const accuracy = result.total ? Math.round(result.correct / result.total * 100) : 0
   const resultFamilies = Object.keys(result.breakdown)
   const reactionOnlyResult = resultFamilies.length === 1 && isReactionFamily(resultFamilies[0])
+  const fixedQuestionResult = resultFamilies.length === 1 && isFixedQuestionFamily(resultFamilies[0])
+  const returnLabel = result.track === 'numbers' ? 'Quick Maths' : result.track === 'logic' ? 'Logic Lab' : 'Cognitive Games'
   const missed = attempts.filter((attempt) => !attempt.correct).slice(0, 5)
-  const formatGiven = (attempt: Attempt) => Array.isArray(attempt.given) ? attempt.given.map((cell) => cell + 1).join(attempt.exercise.answer.kind === 'cells' ? ', ' : ' → ') : attempt.exercise.answer.kind === 'cell' && typeof attempt.given === 'number' ? `Tile ${attempt.given + 1}` : attempt.given
-  return <div className="results-screen"><header className="results-header"><Brand /><button className="text-button" onClick={onHome}>Back to home <X size={16} /></button></header><main className="results-content"><div className="results-kicker"><span><Trophy size={18} /></span> {result.track === 'assessment' ? 'Assessment complete' : result.configuredDuration === 0 ? 'Practice complete' : 'Drill complete'}</div><h1>{accuracy >= 85 ? 'Exceptionally sharp.' : accuracy >= 70 ? 'Strong work.' : accuracy >= 50 ? 'Momentum built.' : 'Baseline captured.'}</h1><p>{result.track === 'assessment' ? 'This is a personal practice score, not a commercial assessment percentile.' : 'Immediate feedback turns each rep into useful practice.'}</p><section className="score-panel"><div className="score-main"><p>Performance score</p><div><strong>{result.score}</strong><span>/100</span></div><small>Personal training metric</small></div><div className="score-metrics"><div><span className="result-icon mint"><Target size={19} /></span><p>Accuracy</p><strong>{accuracy}%</strong><small>{result.correct} / {result.total} correct</small></div><div><span className="result-icon yellow"><Zap size={19} /></span><p>Median response</p><strong>{result.medianMs ? reactionOnlyResult ? `${result.medianMs}ms` : `${(result.medianMs / 1000).toFixed(1)}s` : '—'}</strong><small>Answered items</small></div><div><span className="result-icon pink">{reactionOnlyResult ? <Gauge size={19} /> : <ArrowRight size={19} />}</span><p>{reactionOnlyResult ? 'Reaction points' : 'Skipped'}</p><strong>{reactionOnlyResult ? result.points || 0 : result.skipped}</strong><small>{reactionOnlyResult ? 'Speed-weighted total' : 'Unanswered'}</small></div></div></section><section className="breakdown-panel"><div className="panel-heading"><div><p className="eyebrow">Skill breakdown</p><h3>Where the session landed</h3></div></div><div className="breakdown-grid">{Object.entries(result.breakdown).map(([family, raw]) => { const item = raw as SkillBreakdown; return <div key={family}><strong>{FAMILY_LABELS[family as ExerciseFamily]}</strong><span>{item.attempted ? Math.round(item.correct / item.attempted * 100) : 0}%</span><small>{item.correct}/{item.attempted} correct · {item.medianMs ? isReactionFamily(family) ? `${item.medianMs}ms` : `${(item.medianMs / 1000).toFixed(1)}s` : '—'} median</small></div> })}</div></section><div className="results-lower"><section className="review-panel"><div className="panel-heading"><div><p className="eyebrow">Quick review</p><h3>{missed.length ? 'Worth another look' : 'A perfect run'}</h3></div><span>{missed.length} shown</span></div><div className="missed-list rich-review">{missed.map((attempt) => <div key={attempt.exercise.id}><span>{attempt.exercise.prompt.replace('\n', ' / ')}</span><i>{attempt.skipped ? 'Skipped' : `Your answer: ${formatGiven(attempt)}`}</i><strong>{attempt.exercise.explanation}</strong></div>)}</div></section><section className="next-panel"><p className="eyebrow">Next move</p><h3>Lock it in with one more.</h3><p>Repeat the same configuration or return to choose another skill.</p><button className="primary-button dark wide" onClick={onRetry}><TimerReset size={17} /> Run it again</button><button className="text-button centered" onClick={onHome}>Finish for now</button></section></div></main></div>
+  const formatGiven = (attempt: Attempt) => Array.isArray(attempt.given)
+    ? attempt.given.map((cell) => cell + 1).join(attempt.exercise.answer.kind === 'cells' ? ', ' : ' → ')
+    : attempt.exercise.answer.kind === 'cell' && typeof attempt.given === 'number' ? `Tile ${attempt.given + 1}` : attempt.given
+  const completionLabel = result.track === 'assessment'
+    ? 'Assessment complete'
+    : fixedQuestionResult ? 'Challenge complete' : result.configuredDuration === 0 ? 'Practice complete' : 'Drill complete'
+  const summary = result.track === 'assessment'
+    ? 'This is a personal practice score, not a commercial assessment percentile.'
+    : reactionOnlyResult
+      ? 'Accuracy matters, but fast correct reactions are what lift the score.'
+      : fixedQuestionResult ? 'This score reflects recall accuracy, without rewarding speed.' : 'Immediate feedback turns each rep into useful practice.'
+
+  return <div className="results-screen">
+    <header className="results-header"><Brand /><button className="text-button" onClick={onHome}>Back to {returnLabel} <X size={16} /></button></header>
+    <main className="results-content">
+      <div className="results-kicker"><span><Trophy size={18} /></span> {completionLabel}</div>
+      <h1>{accuracy >= 85 ? 'Exceptionally sharp.' : accuracy >= 70 ? 'Strong work.' : accuracy >= 50 ? 'Momentum built.' : 'Baseline captured.'}</h1>
+      <p>{summary}</p>
+      <section className="score-panel">
+        <div className="score-main"><p>Performance score</p><div><strong>{result.score}</strong><span>/100</span></div><small>Personal training metric</small></div>
+        <div className="score-metrics">
+          <div><span className="result-icon mint"><Target size={19} /></span><p>Accuracy</p><strong>{accuracy}%</strong><small>{result.correct} / {result.total} correct</small></div>
+          <div><span className="result-icon yellow">{fixedQuestionResult ? <ListOrdered size={19} /> : <Zap size={19} />}</span><p>{fixedQuestionResult ? 'Questions' : 'Median response'}</p><strong>{fixedQuestionResult ? result.total : result.medianMs ? reactionOnlyResult ? `${result.medianMs}ms` : `${(result.medianMs / 1000).toFixed(1)}s` : '—'}</strong><small>{fixedQuestionResult ? 'Fixed-length challenge' : 'Answered items'}</small></div>
+          <div><span className="result-icon pink">{reactionOnlyResult ? <Gauge size={19} /> : fixedQuestionResult ? <Flame size={19} /> : <ArrowRight size={19} />}</span><p>{reactionOnlyResult ? 'Reaction points' : fixedQuestionResult ? 'Best streak' : 'Skipped'}</p><strong>{reactionOnlyResult ? result.points || 0 : fixedQuestionResult ? result.bestStreak : result.skipped}</strong><small>{reactionOnlyResult ? 'Speed-weighted total' : fixedQuestionResult ? 'Correct in a row' : 'Unanswered'}</small></div>
+        </div>
+      </section>
+      <section className="breakdown-panel"><div className="panel-heading"><div><p className="eyebrow">Skill breakdown</p><h3>Where the session landed</h3></div></div><div className="breakdown-grid">{Object.entries(result.breakdown).map(([family, raw]) => { const item = raw as SkillBreakdown; return <div key={family}><strong>{FAMILY_LABELS[family as ExerciseFamily]}</strong><span>{item.attempted ? Math.round(item.correct / item.attempted * 100) : 0}%</span><small>{item.correct}/{item.attempted} correct{fixedQuestionResult ? '' : ` · ${item.medianMs ? isReactionFamily(family) ? `${item.medianMs}ms` : `${(item.medianMs / 1000).toFixed(1)}s` : '—'} median`}</small></div> })}</div></section>
+      <div className="results-lower">
+        <section className="review-panel"><div className="panel-heading"><div><p className="eyebrow">Quick review</p><h3>{missed.length ? 'Worth another look' : 'A perfect run'}</h3></div><span>{missed.length} shown</span></div><div className="missed-list rich-review">{missed.map((attempt) => <div key={attempt.exercise.id}><span>{attempt.exercise.prompt.replace('\n', ' / ')}</span><i>{attempt.skipped ? 'Skipped' : `Your answer: ${formatGiven(attempt)}`}</i><strong>{attempt.exercise.explanation}</strong></div>)}</div></section>
+        <section className="next-panel"><p className="eyebrow">Next move</p><h3>Lock it in with one more.</h3><p>Repeat the same configuration or return to choose another skill.</p><button className="primary-button dark wide" onClick={onRetry}><TimerReset size={17} /> Run it again</button><button className="text-button centered" onClick={onHome}>Finish for now</button></section>
+      </div>
+    </main>
+  </div>
 }
 
 function ProgressPage({ sessions, onStart }: { sessions: SessionResult[]; onStart: () => void }) {
@@ -1069,11 +1124,12 @@ export default function App() {
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions)) }, [sessions]); useEffect(() => { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences)) }, [preferences])
   useEffect(() => { window.scrollTo(0, 0) }, [view])
   const start = (nextConfig: SessionConfig) => { setConfig(nextConfig); setView('session') }
+  const sectionForTrack = (track: Track): View => track === 'numbers' ? 'numbers' : track === 'logic' ? 'logic' : 'cognitive'
   const finish = useCallback((finishedConfig: SessionConfig, attempts: Attempt[], elapsed: number) => { const result = buildSessionResult(finishedConfig, attempts, elapsed); setLastAttempts(attempts); setLastResult(result); if (attempts.some((attempt) => !attempt.skipped)) setSessions((current) => [result, ...current].slice(0, 500)); setView('results') }, [])
   const retry = () => config?.simulation ? setView('assessment') : setView('session')
-  if (view === 'session' && config) return <PracticeSession key={`${config.label}-${Date.now()}`} config={config} onFinish={finish} onExit={() => setView('dashboard')} />
+  if (view === 'session' && config) return <PracticeSession key={`${config.label}-${Date.now()}`} config={config} onFinish={finish} onExit={() => setView(sectionForTrack(config.track))} />
   if (view === 'assessment') return <AssessmentSession onFinish={(assessmentConfig, attempts, elapsed) => { setConfig(assessmentConfig); finish(assessmentConfig, attempts, elapsed) }} onExit={() => setView('cognitive')} />
-  if (view === 'results' && lastResult) return <Results result={lastResult} attempts={lastAttempts} onHome={() => setView('dashboard')} onRetry={retry} />
-  const titles: Record<View, string> = { dashboard: 'Home', numbers: 'Fast Numbers+', logic: 'Logic Lab', cognitive: 'Cognitive Games', progress: 'Progress', session: 'Session', assessment: 'Assessment', results: 'Results' }
-  return <div className="app-shell"><Sidebar view={view} onNavigate={setView} open={mobileOpen} onClose={() => setMobileOpen(false)} /><div className="main-shell"><Topbar title={titles[view]} streak={trainingStreak(sessions)} onMenu={() => setMobileOpen(true)} /><main>{view === 'dashboard' && <Dashboard sessions={sessions} onNavigate={setView} onStart={start} />}{view === 'numbers' && <PracticeLab track="numbers" families={NUMBER_FAMILIES} preferences={preferences} sessions={sessions} onPreferences={setPreferences} onStart={start} />}{view === 'logic' && <PracticeLab track="logic" families={LOGIC_FAMILIES} preferences={preferences} sessions={sessions} onPreferences={setPreferences} onStart={start} />}{view === 'cognitive' && <PracticeLab track="cognitive" families={COGNITIVE_FAMILIES} preferences={preferences} sessions={sessions} onPreferences={setPreferences} onStart={start} />}{view === 'progress' && <ProgressPage sessions={sessions} onStart={() => setView('numbers')} />}</main></div></div>
+  if (view === 'results' && lastResult) return <Results result={lastResult} attempts={lastAttempts} onHome={() => setView(sectionForTrack(lastResult.track))} onRetry={retry} />
+  const titles: Record<View, string> = { dashboard: 'Home', numbers: 'Quick Maths', logic: 'Logic Lab', cognitive: 'Cognitive Games', hirevue: 'Interview Studio', progress: 'Progress', session: 'Session', assessment: 'Assessment', results: 'Results' }
+  return <div className="app-shell"><Sidebar view={view} onNavigate={setView} open={mobileOpen} onClose={() => setMobileOpen(false)} /><div className="main-shell"><Topbar title={titles[view]} streak={trainingStreak(sessions)} onMenu={() => setMobileOpen(true)} /><main>{view === 'dashboard' && <Dashboard sessions={sessions} onNavigate={setView} onStart={start} />}{view === 'numbers' && <PracticeLab track="numbers" families={NUMBER_FAMILIES} preferences={preferences} sessions={sessions} onPreferences={setPreferences} onStart={start} />}{view === 'logic' && <PracticeLab track="logic" families={LOGIC_FAMILIES} preferences={preferences} sessions={sessions} onPreferences={setPreferences} onStart={start} />}{view === 'cognitive' && <PracticeLab track="cognitive" families={COGNITIVE_FAMILIES} preferences={preferences} sessions={sessions} onPreferences={setPreferences} onStart={start} />}{view === 'hirevue' && <HireVue onExit={() => setView('dashboard')} />}{view === 'progress' && <ProgressPage sessions={sessions} onStart={() => setView('numbers')} />}</main></div></div>
 }

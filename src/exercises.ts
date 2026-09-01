@@ -1856,9 +1856,7 @@ function angleCompositionExercise(level: number, seed: number, rng: RandomSource
 }
 
 function reflectionInstruction(axis: 'vertical' | 'horizontal') {
-  return axis === 'horizontal'
-    ? 'across the horizontal centre line (top ↔ bottom)'
-    : 'across the vertical centre line (left ↔ right)'
+  return `across the ${axis} axis`
 }
 
 function spatial(level: number, seed: number, rng: RandomSource): Exercise {
@@ -1897,7 +1895,7 @@ function spatial(level: number, seed: number, rng: RandomSource): Exercise {
   } else if (variant === 'inverse-transform') {
     const degrees = rng.pick([90, 180, 270]); shown = rotateSpatialToken(start, degrees); answer = start; prompt = `The shown tile is the result of a ${degrees}° clockwise rotation. Which tile was the original?`; explanation = `Undo the change with a ${normalRotation(360 - degrees)}° clockwise rotation.`; responseTargetMs = band === 3 ? 15000 : 13000
   } else {
-    const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); const first = rng.pick([90, 270]); const second = rng.pick([90, 180]); answer = reflectSpatialToken(rotateSpatialToken(reflectSpatialToken(start, axis), first), axis); answer = rotateSpatialToken(answer, second); prompt = `Reflect ${reflectionInstruction(axis)}, rotate ${first}° clockwise, reflect across that same centre line again, then rotate ${second}°.`; explanation = `Track the position and symbol direction through both reflections ${reflectionInstruction(axis)} and the two rotations.`; responseTargetMs = 17500
+    const axis = rng.pick<'vertical' | 'horizontal'>(['vertical', 'horizontal']); const first = rng.pick([90, 270]); const second = rng.pick([90, 180]); answer = reflectSpatialToken(rotateSpatialToken(reflectSpatialToken(start, axis), first), axis); answer = rotateSpatialToken(answer, second); prompt = `Reflect ${reflectionInstruction(axis)}, rotate ${first}° clockwise, reflect across that same axis again, then rotate ${second}°.`; explanation = `Track the position and symbol direction through both reflections ${reflectionInstruction(axis)} and the two rotations.`; responseTargetMs = 17500
   }
   const { options, correct } = spatialOptions(rng, answer)
   return { id: id('spatial', seed), family: 'spatial', variant, label: 'Spatial Lab', prompt, instruction: 'Track both the symbol direction and its off-centre position.', difficulty: level, responseTargetMs, answer: { kind: 'choice', value: correct }, options, visual: { kind: 'tiles', columns: 1, cells: [shown], positionGuide: true }, explanation }
@@ -2086,7 +2084,7 @@ export function generateVariedExercise(
     if (promptIsNew) questionUniqueCandidate ||= candidate
   }
 
-  const prioritiseQuestionVariety = ['arithmetic', 'percentages', 'fractions', 'ratios', 'averages', 'rates', 'powers', 'estimation', 'matrix', 'rule-breaker'].includes(family)
+  const prioritiseQuestionVariety = ['arithmetic', 'percentages', 'fractions', 'ratios', 'averages', 'rates', 'powers', 'estimation', 'sequences', 'data-sprint', 'matrix', 'rule-breaker'].includes(family)
   return prioritiseQuestionVariety
     ? differentFromLastCandidate || questionUniqueCandidate || freshVariantCandidate || firstCandidate!
     : freshVariantCandidate || differentFromLastCandidate || questionUniqueCandidate || firstCandidate!

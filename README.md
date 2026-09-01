@@ -27,9 +27,9 @@ The project is deliberately local-first: exercises are generated on-device, prog
 
 | Track | What it covers |
 | --- | --- |
-| **Fast Numbers+** | Arithmetic, percentages, fractions, ratios, averages, rates and units, powers and roots, and estimation |
-| **Logic Lab** | Number sequences, visual matrices, rule-breaking puzzles and constraint logic |
-| **Cognitive Games** | Data interpretation, precision recall, pattern memory, sequence tracking, reaction speed, spatial reasoning and route planning |
+| **Quick Maths** | Arithmetic, percentages, fractions, ratios, averages, rates and units, powers and roots, estimation, sequences, and data interpretation |
+| **Logic Lab** | Visual matrices, rule-breaking, constraints, precision recall, spatial reasoning, and route planning |
+| **Cognitive Games** | Pattern memory, sequence tracking, attention, and reaction speed |
 
 Every generated exercise includes a concise explanation. Adaptive sessions raise or lower the level of each exercise family independently, so improvement in one skill does not make unrelated drills unnecessarily difficult.
 

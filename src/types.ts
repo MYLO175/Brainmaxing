@@ -127,6 +127,8 @@ export type SessionResult = {
   difficulty: Difficulty
   /** Selected timer in seconds. Zero identifies an untimed practice session. */
   configuredDuration?: number
+  /** Fixed round count when the session uses questions instead of a timer. */
+  questionCount?: number
   /** Actual time spent in the session, in seconds. */
   duration: number
   correct: number
@@ -147,6 +149,8 @@ export type SessionConfig = {
   families: ExerciseFamily[]
   difficulty: Difficulty
   duration: number
+  /** Fixed number of rounds for games whose performance is not timer-based. */
+  questionCount?: number
   simulation?: boolean
   controls?: { leftKey: string; rightKey: string }
 }
@@ -176,15 +180,15 @@ export const FAMILY_LABELS: Record<ExerciseFamily, string> = {
 }
 
 export const NUMBER_FAMILIES: ExerciseFamily[] = [
-  'arithmetic', 'percentages', 'fractions', 'ratios', 'averages', 'rates', 'powers', 'estimation',
+  'arithmetic', 'percentages', 'fractions', 'ratios', 'averages', 'rates', 'powers', 'estimation', 'sequences', 'data-sprint',
 ]
 
 export const LOGIC_FAMILIES: ExerciseFamily[] = [
-  'sequences', 'matrix', 'rule-breaker', 'constraints',
+  'matrix', 'rule-breaker', 'constraints', 'debug-scan', 'spatial', 'route-planner',
 ]
 
 export const COGNITIVE_FAMILIES: ExerciseFamily[] = [
-  'data-sprint', 'debug-scan', 'pattern-recall', 'tile-sequence', 'arrow-shift', 'reaction-match', 'arrow-focus', 'spatial', 'route-planner',
+  'pattern-recall', 'tile-sequence', 'arrow-shift', 'reaction-match', 'arrow-focus',
 ]
 
 export function isExerciseFamily(value: string): value is ExerciseFamily {

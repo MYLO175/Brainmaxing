@@ -9,7 +9,7 @@ APP_DIR="$NATIVE_BUILD_DIR/Brainmax.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 ICONSET_DIR="$BUILD_DIR/AppIcon.iconset"
-MODULE_CACHE="$BUILD_DIR/swift-module-cache"
+MODULE_CACHE="$NATIVE_BUILD_DIR/swift-module-cache"
 
 cd "$PROJECT_DIR"
 npm run build
